@@ -1,0 +1,126 @@
+FeatureName,FeatureType,Description
+FlowID,Categorical,flow identifier composed of source and destination ports and protocol
+Rank,Integer,sequence number
+StartTime,Timestamp,record start time
+LastTime,Timestamp,record last time
+Trans,Integer,aggregation record count
+Flgs,Categorical,flow state flags seen in transaction
+Seq,Integer,argus sequence number
+Dur,Continuous,record total duration
+RunTime,Continuous,total active flow run time. sum of the records duration
+IdleTime,Continuous,time since the last packet activity. current time - last time
+Mean,Continuous,average duration of aggregated records
+StdDev,Integer,standard deviation of aggregated duration times
+Sum,Continuous,total accumulated durations of aggregated records
+Min,Continuous,minimum duration of aggregated records
+Max,Continuous,maximum duration of aggregated records
+SrcMac,Categorical,source MAC address
+DstMac,Categorical,destination MAC address
+SrcOui,Categorical,oui portion of the source MAC address
+DstOui,Categorical,oui portion of the destination MAC address
+SrcAddr,Categorical,source IP address
+DstAddr,Categorical,destination IP address
+Proto,Categorical,transaction protocol
+Sport,Integer,source port number
+Dport,Integer,destination port number
+sTos,Integer,source TOS byte value
+dTos,Integer,destination TOS byte value
+sDSb,Categorical,source diff serve byte value
+dDSb,Categorical,destination diff serve byte value
+sCo,Categorical,source IP address country code
+dCo,Categorical,destination IP address country code
+sTtl,Integer,source -> destination TTL value
+dTtl,Integer,destionation -> source TTL value
+sHops,Integer,estimate of number of IP hops from source to this point
+dHops,Integer,estimate of number of IP hops from destionation to this point
+sIpId,Integer,source IP identifier
+dIpId,Integer,destination IP identifier
+sMpls,Categorical,source MPLS identifier
+dMpls,Categorical,destination MPLS identifier
+AutoId,Categorical,auto generated identifier (mysql)
+sAS,Categorical,source origin AS
+dAS,Categorical,destination origin AS
+iAS,Categorical,intermediate origin AS, AS of ICMP generator
+Cause,Categorical,argus record cause code. Valid values are Start, Status, Stop, Close, Error
+NStrok,Integer,number of observed keystrokes
+sNStrok,Integer,number of observed keystrokes from initiator (source) to target (destionation)
+dNStrok,Integer,number of observed keystrokes from target (destination) to initiator (source)
+TotPkts,Integer,total transaction packet count
+SrcPkts,Integer,source -> destination packet count
+DstPkts,Integer,destionation -> source packet count
+TotBytes,Integer,total transaction bytes
+SrcBytes,Integer,source -> destination transaction bytes
+DstBytes,Integer,destination -> source transaction bytes
+TotAppByte,Integer,total application bytes
+SAppBytes,Integer,source -> destination application bytes
+DAppBytes,Integer,destination -> source application bytes
+PCRatio,Continuous,producer consumer ratio
+Load,Continuous,bits per second
+SrcLoad,Continuous,source bits per second
+DstLoad,Continuous,destination bits per second
+Loss,Integer,packets retransmitted or dropped
+SrcLoss,Integer,source packets retransmitted or dropped
+DstLoss,Integer,destination packets retransmitted or dropped
+pLoss,Continuous,percent packets retransmitted or dropped
+Retrans,Integer,packets retransmitted
+SrcRetra,Integer,source packets retransmitted
+DstRetra,Integer,destination packets retransmitted
+pRetran,Integer,percent packets retransmitted
+SrcGap,Integer,source bytes missing in the data stream
+DstGap,Integer,destination bytes missing in the data stream
+Rate,Continuous,packets per second
+SrcRate,Continuous,source packets per second
+DstRate,Countinuous,destination packets per second
+Dir,Categorical,direction of transaction
+SIntPkt,Continuous,source interpacket arrival time (mSec)
+SIntPktMin,Continuous,minimum value of the source interpacket arrival time (mSec)
+SIntPktMax,Continuous,maximum value of the source interpacket arrival time (mSec)
+SIntDist,Continuous,source interpacket arrival time distribution
+SIntPktAct,Continuous,source active interpacket arrival time (mSec)
+SIntActDist,Continuous,source active interpacket arrival time (mSec)
+SIntPktIdl,Continuous,source idle interpacket arrival time (mSec)
+SIntIdlDist,Continuous,source idle interpacket arrival time (mSec)
+DIntPkt,Continuous,destination interpacket arrival time (mSec)
+DIntPktMin,Continuous,minimum value of the destination interpacket arrival time (mSec)
+DIntPktMax,Continuous,maximum value of the destination interpacket arrival time (mSec)
+DIntDist,Continuous,destination interpacket arrival time distribution
+DIntPktAct,Continuous,destination active interpacket arrival time (mSec)
+DIntActDist,Continuous,destination active interpacket arrival time distribution (mSec)
+DIntPktIdl,Continuous,destination idle interpacket arrival time (mSec)
+DIntIdlDist,Continuous,destination idle interpacket arrival time distribution
+SrcJitter,Continuous,source jitter (mSec)
+SrcJitAct,Continuous,source active jitter (mSec)
+DstJitter,Continuous,destination jitter (mSec)
+DstJitAct,Continuous,destination active jitter (mSec)
+State,Categorical,transaction state
+srcUdata,Continuous,source user data buffer
+dstUdata,Continuous,destination user data buffer
+SrcWin,Integer,source TCP window advertisement
+DstWin,Integer,destination TCP window advertisement
+sVlan,Categorical,source VLAN identifier
+dVlan,Categorical,destination VLAN identifier
+sVid,Categorical,source VLAN identifier
+dVid,Categorical,destination VLAN identifier
+sVpri,Categorical,source VLAN priority
+dVpri,Categorical,destination VLAN priority
+SRange,Timestamp,start time for the filter timerange
+ERange,Timestamp,end time for the filter timerange
+SrcTCPBase,Integer,source TCP base sequence number
+DstTCPBase,Integer,destination TCP base sequence number
+TcpRtt,Continuous,TCP connection setup round-trip time, the sum of 'synack' and 'ackdat'
+SynAck,Continuous,TCP connection setup time, the time between the SYN and the SYN_ACK packets
+AckDat,Continuous,TCP connection setup time, the time between the SYN_ACK and the ACK packets
+TcpOpt,Categorical,TCP connection options seen at initiation. The tcpopt indicator consists of a fixed length field, that reports presence of any of the TCP options that argus tracks
+Inode,Categorical,ICMP intermediate node
+Offset,Integer,record byte offset in file or stream
+sMeanPktSz,Continuous,mean of the flow packet size transmitted by the source (initiator)
+dMeanPktSz,Continuous,Mean of the flow packet size transmitted by the destination (target)
+sMaxPktSz,Integer,maximum packet size for traffic transmitted by the source
+dMaxPktSz,Integer,maximum packet size for traffic transmitted by the destination
+sMinPktSz,Integer,minimum packet size for traffic transmitted by the source
+dMinPktSz,Integer,minimum packet size for traffic transmitted by the destination
+Ssaddr,Integer,number of connections with the same service and source address
+Sdaddr,Integer,number of connections with the same service and destination address
+BinaryLabel,Categorical, flow identifier - 1 for malicious and 0 for benign
+CategoryLabel,Categorical,category of type of traffic - either benign or the attack type
+SubCategoryLabel,Categorical,specific category of traffic type
