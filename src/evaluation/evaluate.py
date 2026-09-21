@@ -2,7 +2,6 @@
 Model evaluation utilities for the GeNIS IDS pipeline.
 """
 
-from bokeh import model
 import time
 from pathlib import Path
 

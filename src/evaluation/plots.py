@@ -2,8 +2,6 @@
 Confusion matrix visualisation utilities.
 """
 
-from scipy.spatial.transform import rotation
-from paramiko import file
 from pathlib import Path
 
 import matplotlib.pyplot as plt
