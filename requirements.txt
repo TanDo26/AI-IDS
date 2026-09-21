@@ -1,7 +1,9 @@
-torch
 pandas
 numpy
-matplotlib 
-seaborn 
+matplotlib
+seaborn
 scikit-learn
-imblearn
+imbalanced-learn
+pyyaml
+joblib
+tqdm
