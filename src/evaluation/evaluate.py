@@ -2,6 +2,7 @@
 Model evaluation utilities for the GeNIS IDS pipeline.
 """
 
+from bokeh import model
 import time
 from pathlib import Path
 
@@ -9,13 +10,11 @@ import pandas as pd
 
 from .metrics import calculate_metrics
 
-def evaluate_model(model, preprocessor, X_test, y_test, experiment_id, train_time=None, prediction_filepath=None):
-
-    X_test_transformed = preprocessor.transform(X_test)
+def evaluate_model(model, X_test, y_test, experiment_id, train_time=None, prediction_filepath=None):
 
     start_time = time.perf_counter()
 
-    y_pred = model.predict(X_test_transformed)
+    y_pred = model.predict(X_test)
 
     inference_time = time.perf_counter() - start_time
 
