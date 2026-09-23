@@ -3,41 +3,35 @@ Model evaluation utilities for the GeNIS IDS pipeline.
 """
 
 import time
-from pathlib import Path
-
 import pandas as pd
-
 from .metrics import calculate_metrics
 
-def evaluate_model(model, X_test, y_test, experiment_id, train_time=None, prediction_filepath=None):
 
-    start_time = time.perf_counter()
+def evaluate_experiment(model, X_test, y_test, experiment: dict,
+                        split_name: str):
+    
+    exp_name = experiment["name"]
+    model_name = experiment["model"]
+    strategy = experiment["strategy"]
 
+    start = time.perf_counter()
     y_pred = model.predict(X_test)
+    inference_time = time.perf_counter() - start
 
-    inference_time = time.perf_counter() - start_time
+    y_prob = None
+    if hasattr(model, "predict_proba"):
+        y_prob = model.predict_proba(X_test)[:, 1]
+    elif hasattr(model, "decision_function"):
+        y_prob = model.decision_function(X_test)
 
-    metrics = calculate_metrics(y_test, y_pred)
-    metrics["experiment"] = experiment_id
-    metrics["train_time"] = train_time
-    metrics["inference_time"] = inference_time
+    metrics = calculate_metrics(y_test, y_pred, y_prob)
 
-    if prediction_filepath is not None:
-        save_predictions(y_test, y_pred, prediction_filepath)
-
-    return metrics
-
-def save_predictions(y_test, y_pred, filepath):
-
-    filepath = Path(filepath)
-
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-
-    predictions = pd.DataFrame({
-        "y_true": y_test,
-        "y_pred": y_pred
+    metrics.update({
+        "experiment": exp_name,
+        "model": model_name,
+        "strategy": strategy,
+        "split": split_name,
+        "inference_time_s": round(inference_time, 4),
     })
 
-    predictions.to_csv(filepath, index=False)
-
-    print(f"Predictions saved to {filepath}")
+    return metrics, y_pred, y_prob
