@@ -43,26 +43,6 @@ def load_dataset(config):
         raise ValueError(f"No data files configured for dataset '{dataset_name}'.")
 
     combined = pd.concat(dataframes, ignore_index=True)
-
-    print("\n" + "=" * 70)
-    print("Combined dataset")
-    print("=" * 70)
-
-    print(
-        f"Shape: "
-        f"{combined.shape[0]:,} rows × "
-        f"{combined.shape[1]:,} columns"
-    )
-
-    print("\nData types:")
-    print(combined.dtypes)
-
-    print("\nRows by source file:")
-    print(
-        combined["_source_file"]
-        .value_counts()
-        .sort_index()
-    )
-
+    
     return combined
 

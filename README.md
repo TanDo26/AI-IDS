@@ -95,7 +95,7 @@ AI-IDS/
 │       ├── metrics.py               # F1, Recall, FPR, FNR, PR-AUC
 │       ├── evaluate.py              # Evaluation orchestration
 │       └── plots.py                 # Confusion matrix + PR curve plots
-├── scipts/
+├── scripts/
 │   ├── prepare_data.py              # CLI: load → clean → split
 │   ├── train_all.py                 # CLI: train 4 experiments × 2 splits
 │   └── evaluate_all.py              # CLI: evaluate + report
@@ -118,18 +118,19 @@ AI-IDS/
 
 ### Option 1: Run with Docker (Recommended)
 
+**Run full pipeline in one command:**
+
 ```bash
-# Build the Docker image
 docker compose build
+docker compose run --rm run-all
+```
 
-# Step 1 — Prepare data (load, clean, split)
-docker compose run --rm prepare
+Or run each step individually:
 
-# Step 2 — Train all experiments
-docker compose run --rm train
-
-# Step 3 — Evaluate and generate reports
-docker compose run --rm evaluate
+```bash
+docker compose run --rm prepare      # Step 1: load → clean → split
+docker compose run --rm train        # Step 2: train all experiments
+docker compose run --rm evaluate     # Step 3: evaluate + report
 ```
 
 ### Option 2: Run Locally with Python
@@ -144,13 +145,13 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # 3. Prepare data (load → clean → split)
-python scipts/prepare_data.py
+python scripts/prepare_data.py
 
 # 4. Train all experiments (4 experiments × 2 splits)
-python scipts/train_all.py
+python scripts/train_all.py
 
 # 5. Evaluate and generate reports
-python scipts/evaluate_all.py
+python scripts/evaluate_all.py
 ```
 
 ### Pipeline Steps Explained

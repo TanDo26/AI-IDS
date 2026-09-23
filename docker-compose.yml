@@ -27,3 +27,8 @@ services:
     extends:
       service: ids
     command: ["scripts/evaluate_all.py"]
+
+  run-all:
+    extends:
+      service: ids
+    command: ["scripts/run_all.py"]
