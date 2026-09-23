@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  ids:
+    build: .
+    container_name: ai-ids
+    volumes:
+      - .:/app
+      - ./dataset:/app/dataset
+      - ./models:/app/models
+      - ./results:/app/results
+    environment:
+      - PYTHONPATH=/app
+    working_dir: /app
+
+  prepare:
+    extends:
+      service: ids
+    command: ["scripts/prepare_data.py"]
+
+  train:
+    extends:
+      service: ids
+    command: ["scripts/train_all.py"]
+
+  evaluate:
+    extends:
+      service: ids
+    command: ["scripts/evaluate_all.py"]
