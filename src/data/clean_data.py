@@ -1,5 +1,7 @@
+import json
 import numpy as np
 import pandas as pd
+from pathlib import Path
 
 
 def clean_dataset(df: pd.DataFrame, config: dict) -> pd.DataFrame:
@@ -62,10 +64,23 @@ def clean_dataset(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     df["OriginalLabel"] = df[target_column].copy()
 
     label_mapping = dataset_config["label_mapping"]
-
     benign_label = label_mapping["benign_label"]
 
     df["BinaryLabel"] = (df[target_column] != benign_label).astype(int)
+
+    unique_labels = sorted(df["OriginalLabel"].unique())
+    label_to_int = {label: idx for idx, label in enumerate(unique_labels)}
+    df["MulticlassLabel"] = df["OriginalLabel"].map(label_to_int)
+
+    ds_name = config["active_dataset"]
+    mapping_path = Path(config["datasets"][ds_name]["data_dir"]) / "label_mapping.json"
+    mapping_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(mapping_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "label_to_int": label_to_int,
+            "int_to_label": {str(v): k for k, v in label_to_int.items()},
+            "num_classes": len(unique_labels),
+        }, f, indent=2)
 
     final_rows = len(df)
     removed_rows = initial_rows - final_rows
@@ -91,11 +106,19 @@ def clean_dataset(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     print(f"    Attack (1): {attack_count:,}")
 
     print("\n  Original label distribution:")
-
     print(df["OriginalLabel"].value_counts().to_string())
+
+    print(f"\n  Multiclass: {len(label_to_int)} classes")
+    for label, idx in sorted(label_to_int.items(), key=lambda x: x[1]):
+        count = int((df["MulticlassLabel"] == idx).sum())
+        print(f"    {idx}: {label} ({count:,})")
+
+    print(f"\n  Label mapping saved to {mapping_path}")
 
 
     assert set(df["BinaryLabel"].unique()).issubset({0, 1}), "BinaryLabel must contain only 0 and 1."
+
+    assert not df["MulticlassLabel"].isnull().any(), "MulticlassLabel contains null values."
 
     assert not df["OriginalLabel"].astype(str).str.contains(
         "Attempted",

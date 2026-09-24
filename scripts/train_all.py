@@ -1,5 +1,5 @@
 """
-Trains all experiments across all split strategies.
+Trains all experiments as defined in config.yaml.
 """
 import sys
 import time
@@ -19,26 +19,23 @@ def main():
         config = yaml.safe_load(f)
 
     experiments = config["experiments"]
-    split_strategies = config["splitting"]["strategies"]
 
     print("=" * 70)
     print("  AI-IDS MODEL TRAINING".center(70))
     print("=" * 70)
-    print(f"  Experiments: {len(experiments)}")
-    print(f"  Splits: {split_strategies}")
-    print(f"  Total runs: {len(experiments) * len(split_strategies)}")
+    print(f"  Total experiments: {len(experiments)}")
 
     all_results = []
     start = time.perf_counter()
 
-    for split_name in split_strategies:
-        for experiment in experiments:
-            result = train_experiment(experiment, split_name, config)
-            all_results.append({
-                "experiment": experiment["name"],
-                "split": split_name,
-                "train_time": result["train_time"],
-            })
+    for experiment in experiments:
+        result = train_experiment(experiment, config)
+        all_results.append({
+            "experiment": experiment["name"],
+            "split": experiment["split"],
+            "label": experiment.get("label", "binary"),
+            "train_time": result["train_time"],
+        })
 
     elapsed = time.perf_counter() - start
     print(f"\n{'='*70}")
