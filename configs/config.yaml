@@ -171,6 +171,15 @@ models:
     min_samples_leaf: 2
     random_state: 42
     n_jobs: -1
+  random_forest_regularized:
+    n_estimators: 200
+    max_depth: 15
+    min_samples_split: 10
+    min_samples_leaf: 5
+    max_features: sqrt
+    random_state: 42
+    n_jobs: -1
+
 
 # --- Imbalance ---
 imbalance:
@@ -190,13 +199,19 @@ experiments:
     model: logistic_regression
     strategy: smote
   - name: EXP-02
-    model: random_forest
-    strategy: smote
-  - name: EXP-03
     model: logistic_regression
     strategy: undersampling
+  - name: EXP-03
+    model: random_forest
+    strategy: smote
   - name: EXP-04
     model: random_forest
+    strategy: undersampling
+  - name: EXP-05
+    model: random_forest_regularized
+    strategy: smote
+  - name: EXP-06
+    model: random_forest_regularized
     strategy: undersampling
 
 # --- Evaluation ---
