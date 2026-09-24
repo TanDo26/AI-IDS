@@ -17,28 +17,33 @@ from src.imbalance.undersampling import apply_undersampling
 from src.models.registry import get_model
 
 
-def load_split(split_name: str, config: dict):
+def load_split(split_name: str, label_type: str, config: dict):
     ds_name = config["active_dataset"]
     split_dir = Path(config["output"]["splits_dir"].format(
         dataset_name=ds_name)) / split_name
 
+    label_col = "BinaryLabel" if label_type == "binary" else "MulticlassLabel"
+
     X_train = pd.read_parquet(split_dir / "X_train.parquet")
     X_val = pd.read_parquet(split_dir / "X_val.parquet")
     X_test = pd.read_parquet(split_dir / "X_test.parquet")
-    y_train = pd.read_parquet(split_dir / "y_train.parquet")["BinaryLabel"]
-    y_val = pd.read_parquet(split_dir / "y_val.parquet")["BinaryLabel"]
-    y_test = pd.read_parquet(split_dir / "y_test.parquet")["BinaryLabel"]
+    y_train = pd.read_parquet(split_dir / "y_train.parquet")[label_col]
+    y_val = pd.read_parquet(split_dir / "y_val.parquet")[label_col]
+    y_test = pd.read_parquet(split_dir / "y_test.parquet")[label_col]
 
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
-def train_experiment(experiment: dict, split_name: str, config: dict):
+def train_experiment(experiment: dict, config: dict):
 
     exp_name = experiment["name"]
     model_name = experiment["model"]
     strategy = experiment["strategy"]
+    split_name = experiment["split"]
+    label_type = experiment.get("label", "binary")
+
     print(f"\n{'='*60}")
-    print(f"  {exp_name} | {model_name} | {strategy} | {split_name}")
+    print(f"  {exp_name} | {model_name} | {strategy} | {split_name} | {label_type}")
     print(f"{'='*60}")
 
     steps = [
@@ -58,7 +63,7 @@ def train_experiment(experiment: dict, split_name: str, config: dict):
     )
 
     pbar.set_postfix_str(steps[0])
-    X_train, X_val, X_test, y_train, y_val, y_test = load_split(split_name, config)
+    X_train, X_val, X_test, y_train, y_val, y_test = load_split(split_name, label_type, config)
     pbar.update(1)
 
     pbar.set_postfix_str(steps[1])
@@ -97,10 +102,13 @@ def train_experiment(experiment: dict, split_name: str, config: dict):
         X_train_t, y_train = apply_smote(X_train_t, y_train, config)
     elif strategy == "undersampling":
         X_train_t, y_train = apply_undersampling(X_train_t, y_train, config)
+    elif strategy == "class_weight":
+        print("  Using class_weight='balanced' (no resampling)")
     pbar.update(1)
 
     pbar.set_postfix_str(steps[4])
-    model = get_model(model_name, config)
+    class_weight = "balanced" if strategy == "class_weight" else None
+    model = get_model(model_name, config, class_weight=class_weight)
     print(f"  Training {model_name}...")
     start = time.perf_counter()
     model.fit(X_train_t, y_train)

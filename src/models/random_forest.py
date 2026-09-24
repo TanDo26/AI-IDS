@@ -5,7 +5,7 @@ Random Forest model builder.
 from sklearn.ensemble import RandomForestClassifier
 
 
-def build_random_forest(config, model_name="random_forest"):
+def build_random_forest(config, model_name="random_forest", class_weight=None):
     rf_cfg = config["models"].get(model_name, config["models"]["random_forest"])
     return RandomForestClassifier(
         n_estimators=rf_cfg.get("n_estimators", 200),
@@ -15,4 +15,5 @@ def build_random_forest(config, model_name="random_forest"):
         max_features=rf_cfg.get("max_features", "sqrt"),
         random_state=rf_cfg.get("random_state", 42),
         n_jobs=rf_cfg.get("n_jobs", -1),
+        class_weight=class_weight,
     )

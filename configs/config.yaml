@@ -20,7 +20,6 @@ datasets:
 
     target_column: Label
 
-    # Labels to drop before processing
     drop_labels:
       - Attempted
 
@@ -134,9 +133,11 @@ datasets:
 
 # --- Classification ---
 classification:
-  type: binary
-  positive_label: 1  
-  negative_label: 0  
+  binary:
+    positive_label: 1
+    negative_label: 0
+  multiclass:
+    encoding: auto
 
 # --- Preprocessing ---
 preprocessing:
@@ -183,7 +184,7 @@ models:
 
 # --- Imbalance ---
 imbalance:
-  strategies: [smote, undersampling]
+  strategies: [smote, undersampling, class_weight]
   smote:
     sampling_strategy: auto
     k_neighbors: 5
@@ -192,27 +193,108 @@ imbalance:
     method: RandomUnderSampler
     sampling_strategy: auto
     random_state: 42
+  class_weight:
+    type: balanced
 
 # --- Experiments ---
 experiments:
+  # --- Random Split Experiments ---
   - name: EXP-01
     model: logistic_regression
     strategy: smote
+    split: random
+    label: binary
   - name: EXP-02
     model: logistic_regression
     strategy: undersampling
+    split: random
+    label: binary
   - name: EXP-03
-    model: random_forest
-    strategy: smote
+    model: logistic_regression
+    strategy: class_weight
+    split: random
+    label: binary
+
   - name: EXP-04
     model: random_forest
-    strategy: undersampling
+    strategy: smote
+    split: random
+    label: binary
   - name: EXP-05
+    model: random_forest
+    strategy: undersampling
+    split: random
+    label: binary
+  - name: EXP-06
+    model: random_forest
+    strategy: class_weight
+    split: random
+    label: binary
+
+  - name: EXP-07
     model: random_forest_regularized
     strategy: smote
-  - name: EXP-06
+    split: random
+    label: binary
+  - name: EXP-08
     model: random_forest_regularized
     strategy: undersampling
+    split: random
+    label: binary
+  - name: EXP-09
+    model: random_forest_regularized
+    strategy: class_weight
+    split: random
+    label: binary
+
+  # --- Temporal Split Experiments ---
+  - name: EXP-10
+    model: logistic_regression
+    strategy: smote
+    split: temporal
+    label: binary
+  - name: EXP-11
+    model: logistic_regression
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-12
+    model: logistic_regression
+    strategy: class_weight
+    split: temporal
+    label: binary
+
+  - name: EXP-13
+    model: random_forest
+    strategy: smote
+    split: temporal
+    label: binary
+  - name: EXP-14
+    model: random_forest
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-15
+    model: random_forest
+    strategy: class_weight
+    split: temporal
+    label: binary
+
+  - name: EXP-16
+    model: random_forest_regularized
+    strategy: smote
+    split: temporal
+    label: binary
+  - name: EXP-17
+    model: random_forest_regularized
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-18
+    model: random_forest_regularized
+    strategy: class_weight
+    split: temporal
+    label: binary
 
 # --- Evaluation ---
 evaluation:
