@@ -119,8 +119,16 @@ def train_experiment(experiment: dict, config: dict):
     pbar.set_postfix_str(steps[5])
     models_dir = Path(config["output"]["models_dir"]) / split_name
     models_dir.mkdir(parents=True, exist_ok=True)
-    model_path = models_dir / f"{exp_name}_{model_name}.pkl"
-    joblib.dump(model, model_path)
+
+    # PyTorch models (MLP, LSTM) use pickle; sklearn models use joblib
+    is_torch_model = model_name in ("mlp", "lstm")
+    if is_torch_model:
+        import torch
+        model_path = models_dir / f"{exp_name}_{model_name}.pt"
+        torch.save(model, model_path)
+    else:
+        model_path = models_dir / f"{exp_name}_{model_name}.pkl"
+        joblib.dump(model, model_path)
 
     preproc_dir = Path(config["output"]["preprocessors_dir"])
     preproc_dir.mkdir(parents=True, exist_ok=True)

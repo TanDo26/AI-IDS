@@ -8,3 +8,4 @@ pyyaml>=6.0
 joblib>=1.3
 tqdm>=4.65
 pyarrow>=14.0
+torch>=2.0
