@@ -180,6 +180,24 @@ models:
     max_features: sqrt
     random_state: 42
     n_jobs: -1
+  mlp:
+    hidden_sizes: [256, 128, 64]
+    dropout: 0.3
+    epochs: 50
+    batch_size: 1024
+    lr: 0.001
+    weight_decay: 0.0001
+    patience: 7
+  lstm:
+    hidden_size: 128
+    num_layers: 2
+    dropout: 0.3
+    bidirectional: false
+    epochs: 50
+    batch_size: 1024
+    lr: 0.001
+    weight_decay: 0.0001
+    patience: 7
 
 
 # --- Imbalance ---
@@ -292,6 +310,89 @@ experiments:
     label: binary
   - name: EXP-18
     model: random_forest_regularized
+    strategy: class_weight
+    split: temporal
+    label: binary
+
+  # --- MLP: Multiclass, Random Split ---
+  - name: EXP-19
+    model: mlp
+    strategy: smote
+    split: random
+    label: multiclass
+  - name: EXP-20
+    model: mlp
+    strategy: undersampling
+    split: random
+    label: multiclass
+  - name: EXP-21
+    model: mlp
+    strategy: class_weight
+    split: random
+    label: multiclass
+
+  # --- RF & LG & RF_reg: Multiclass, Random Split ---
+  - name: EXP-22
+    model: random_forest
+    strategy: smote
+    split: random
+    label: multiclass
+  - name: EXP-23
+    model: random_forest
+    strategy: undersampling
+    split: random
+    label: multiclass
+  - name: EXP-24
+    model: random_forest
+    strategy: class_weight
+    split: random
+    label: multiclass
+
+  - name: EXP-25
+    model: random_forest_regularized
+    strategy: smote
+    split: random
+    label: multiclass
+  - name: EXP-26
+    model: random_forest_regularized
+    strategy: undersampling
+    split: random
+    label: multiclass
+  - name: EXP-27
+    model: random_forest_regularized
+    strategy: class_weight
+    split: random
+    label: multiclass
+
+  - name: EXP-28
+    model: logistic_regression
+    strategy: smote
+    split: random
+    label: multiclass
+  - name: EXP-29
+    model: logistic_regression
+    strategy: undersampling
+    split: random
+    label: multiclass
+  - name: EXP-30
+    model: logistic_regression
+    strategy: class_weight
+    split: random
+    label: multiclass
+
+  # --- LSTM: Binary, Temporal Split ---
+  - name: EXP-31
+    model: lstm
+    strategy: smote
+    split: temporal
+    label: binary
+  - name: EXP-32
+    model: lstm
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-33
+    model: lstm
     strategy: class_weight
     split: temporal
     label: binary
