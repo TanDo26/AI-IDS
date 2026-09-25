@@ -1,11 +1,5 @@
 """
 Runs the full AI-IDS pipeline: prepare → train → evaluate.
-
-Supports filtering via --exp / -e:
-  -e .        → run all experiments (default)
-  -e 15       → run only EXP-15
-  -e 10-13    → run EXP-10 through EXP-13
-  -e 5,8,12   → run EXP-05, EXP-08, EXP-12
 """
 import sys
 import time
