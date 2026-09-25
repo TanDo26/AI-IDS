@@ -183,21 +183,21 @@ models:
   mlp:
     hidden_sizes: [256, 128, 64]
     dropout: 0.3
-    epochs: 50
-    batch_size: 1024
+    epochs: 30
+    batch_size: 4096
     lr: 0.001
     weight_decay: 0.0001
-    patience: 7
+    patience: 5
   lstm:
     hidden_size: 128
     num_layers: 2
     dropout: 0.3
     bidirectional: false
-    epochs: 50
-    batch_size: 1024
+    epochs: 30
+    batch_size: 4096
     lr: 0.001
     weight_decay: 0.0001
-    patience: 7
+    patience: 5
 
 
 # --- Imbalance ---

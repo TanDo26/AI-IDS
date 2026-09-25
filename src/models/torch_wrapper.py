@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.utils.class_weight import compute_class_weight
+from tqdm import tqdm
 
 
 class TorchClassifierWrapper:
@@ -88,10 +89,25 @@ class TorchClassifierWrapper:
         patience_counter = 0
 
         self.model_.train()
-        for epoch in range(self.epochs):
+        epoch_bar = tqdm(
+            range(self.epochs),
+            desc="    Training",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+            ncols=80,
+            leave=True,
+        )
+        for epoch in epoch_bar:
             epoch_loss = 0.0
             n_batches = 0
-            for X_batch, y_batch in loader:
+
+            batch_bar = tqdm(
+                loader,
+                desc=f"      Epoch {epoch+1:2d}",
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+                ncols=80,
+                leave=False,
+            )
+            for X_batch, y_batch in batch_bar:
                 X_batch = X_batch.to(self.device)
                 y_batch = y_batch.to(self.device)
 
@@ -103,14 +119,21 @@ class TorchClassifierWrapper:
 
                 epoch_loss += loss.item()
                 n_batches += 1
+                batch_bar.set_postfix_str(f"loss={loss.item():.4f}")
+            batch_bar.close()
 
             avg_loss = epoch_loss / max(n_batches, 1)
             scheduler.step(avg_loss)
 
+            current_lr = optimizer.param_groups[0]["lr"]
+            epoch_bar.set_postfix_str(
+                f"loss={avg_loss:.4f} best={best_loss:.4f} "
+                f"p={patience_counter}/{self.patience} lr={current_lr:.1e}"
+            )
+
             if avg_loss < best_loss - 1e-4:
                 best_loss = avg_loss
                 patience_counter = 0
-                # Save best weights
                 self._best_state = {
                     k: v.cpu().clone() for k, v in self.model_.state_dict().items()
                 }
@@ -118,7 +141,9 @@ class TorchClassifierWrapper:
                 patience_counter += 1
 
             if patience_counter >= self.patience:
+                epoch_bar.set_postfix_str(f"Early stop @ epoch {epoch+1}")
                 break
+        epoch_bar.close()
 
         # Restore best weights
         if hasattr(self, "_best_state"):
