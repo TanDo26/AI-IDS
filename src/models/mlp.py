@@ -3,6 +3,7 @@ MLP (Multi-Layer Perceptron) model builder using PyTorch.
 """
 
 import torch.nn as nn
+from functools import partial
 from .torch_wrapper import TorchClassifierWrapper
 
 
@@ -39,8 +40,7 @@ def build_mlp(config, model_name="mlp", class_weight=None):
     hidden_sizes = mlp_cfg.get("hidden_sizes", [256, 128, 64])
     dropout = mlp_cfg.get("dropout", 0.3)
 
-    def factory(n_features, n_classes):
-        return MLPNetwork(n_features, n_classes, hidden_sizes=hidden_sizes, dropout=dropout)
+    factory = partial(MLPNetwork, hidden_sizes=hidden_sizes, dropout=dropout)
 
     return TorchClassifierWrapper(
         model_factory=factory,

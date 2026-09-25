@@ -5,15 +5,11 @@ each sample as a single-timestep sequence.
 """
 
 import torch.nn as nn
+from functools import partial
 from .torch_wrapper import TorchClassifierWrapper
 
 
 class LSTMNetwork(nn.Module):
-    """An LSTM classifier for tabular data.
-
-    Reshapes flat feature vectors into (batch, seq_len=1, n_features),
-    processes through LSTM layers, then classifies via a FC head.
-    """
 
     def __init__(self, n_features, n_classes, hidden_size=128,
                  num_layers=2, dropout=0.3, bidirectional=False):
@@ -51,7 +47,6 @@ class LSTMNetwork(nn.Module):
 
 
 def build_lstm(config, model_name="lstm", class_weight=None):
-    """Build an LSTM classifier wrapped in sklearn-compatible API."""
     lstm_cfg = config["models"].get(model_name, config["models"].get("lstm", {}))
 
     hidden_size = lstm_cfg.get("hidden_size", 128)
@@ -59,14 +54,13 @@ def build_lstm(config, model_name="lstm", class_weight=None):
     dropout = lstm_cfg.get("dropout", 0.3)
     bidirectional = lstm_cfg.get("bidirectional", False)
 
-    def factory(n_features, n_classes):
-        return LSTMNetwork(
-            n_features, n_classes,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            dropout=dropout,
-            bidirectional=bidirectional,
-        )
+    factory = partial(
+        LSTMNetwork,
+        hidden_size=hidden_size,
+        num_layers=num_layers,
+        dropout=dropout,
+        bidirectional=bidirectional,
+    )
 
     return TorchClassifierWrapper(
         model_factory=factory,
