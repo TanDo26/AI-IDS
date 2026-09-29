@@ -317,81 +317,61 @@ experiments:
   # --- MLP: Multiclass, Random Split ---
   - name: EXP-19
     model: mlp
-    strategy: smote
-    split: random
-    label: multiclass
-  - name: EXP-20
-    model: mlp
     strategy: undersampling
     split: random
     label: multiclass
-  - name: EXP-21
+  - name: EXP-20
     model: mlp
     strategy: class_weight
     split: random
     label: multiclass
 
   # --- RF & LG & RF_reg: Multiclass, Random Split ---
-  - name: EXP-22
-    model: random_forest
-    strategy: smote
-    split: random
-    label: multiclass
-  - name: EXP-23
+  - name: EXP-21
     model: random_forest
     strategy: undersampling
     split: random
     label: multiclass
-  - name: EXP-24
+  - name: EXP-22
     model: random_forest
+    strategy: class_weight
+    split: random
+    label: multiclass
+
+  - name: EXP-23
+    model: random_forest_regularized
+    strategy: undersampling
+    split: random
+    label: multiclass
+  - name: EXP-24
+    model: random_forest_regularized
     strategy: class_weight
     split: random
     label: multiclass
 
   - name: EXP-25
-    model: random_forest_regularized
-    strategy: smote
+    model: logistic_regression
+    strategy: undersampling
     split: random
     label: multiclass
   - name: EXP-26
-    model: random_forest_regularized
-    strategy: undersampling
-    split: random
-    label: multiclass
-  - name: EXP-27
-    model: random_forest_regularized
-    strategy: class_weight
-    split: random
-    label: multiclass
-
-  - name: EXP-28
-    model: logistic_regression
-    strategy: smote
-    split: random
-    label: multiclass
-  - name: EXP-29
-    model: logistic_regression
-    strategy: undersampling
-    split: random
-    label: multiclass
-  - name: EXP-30
     model: logistic_regression
     strategy: class_weight
     split: random
     label: multiclass
 
   # --- LSTM: Binary, Temporal Split ---
-  - name: EXP-31
+  - name: EXP-27
     model: lstm
     strategy: smote
     split: temporal
     label: binary
-  - name: EXP-32
+  - name: EXP-28
     model: lstm
     strategy: undersampling
     split: temporal
     label: binary
-  - name: EXP-33
+  - name: EXP-29
     model: lstm
     strategy: class_weight
     split: temporal

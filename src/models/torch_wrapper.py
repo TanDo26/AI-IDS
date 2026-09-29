@@ -47,6 +47,8 @@ class TorchClassifierWrapper:
     # Sklearn-compatible API
     # ------------------------------------------------------------------
     def fit(self, X, y):
+        print(f"    [PyTorch] Starting training on device: {self.device.type.upper()}")
+        
         X_np = self._to_numpy(X)
         y_np = self._to_numpy(y).astype(np.int64)
 

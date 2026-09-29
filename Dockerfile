@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 # Explicitly install packages with the PyTorch CUDA index to ensure GPU wheels are pulled
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu124
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu130
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
