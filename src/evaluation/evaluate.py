@@ -17,7 +17,6 @@ def evaluate_experiment(model, X_test, y_test, experiment: dict,
 
     start = time.perf_counter()
     y_pred = model.predict(X_test)
-    inference_time = time.perf_counter() - start
 
     y_prob = None
     if hasattr(model, "predict_proba"):
@@ -35,7 +34,7 @@ def evaluate_experiment(model, X_test, y_test, experiment: dict,
         "strategy": strategy,
         "split": split_name,
         "label": label_type,
-        "inference_time_s": round(inference_time, 4),
+        "training_time_s": round(getattr(model, "training_time_s", 0.0), 4),
     })
 
     return metrics, y_pred, y_prob

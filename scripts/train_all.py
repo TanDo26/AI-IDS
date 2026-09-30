@@ -5,6 +5,7 @@ import sys
 import time
 import argparse
 from pathlib import Path
+from src.training.train import prepare_data
 
 import yaml
 
@@ -57,14 +58,23 @@ def main(exp_filter=None):
     all_results = []
     start = time.perf_counter()
 
-    for experiment in experiments:
-        result = train_experiment(experiment, config)
-        all_results.append({
-            "experiment": experiment["name"],
-            "split": experiment["split"],
-            "label": experiment.get("label", "binary"),
-            "train_time": result["train_time"],
-        })
+
+    grouped_experiments = {}
+    for exp in experiments:
+        key = (exp["split"], exp.get("label", "binary"))
+        grouped_experiments.setdefault(key, []).append(exp)
+
+    for (split_name, label_type), exps in grouped_experiments.items():
+        preprocessed_data = prepare_data(split_name, label_type, config)
+        
+        for experiment in exps:
+            result = train_experiment(experiment, config, preprocessed_data)
+            all_results.append({
+                "experiment": experiment["name"],
+                "split": experiment["split"],
+                "label": experiment.get("label", "binary"),
+                "train_time": result["train_time"],
+            })
 
     elapsed = time.perf_counter() - start
     print(f"\n{'='*70}")

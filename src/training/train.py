@@ -34,39 +34,13 @@ def load_split(split_name: str, label_type: str, config: dict):
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
-def train_experiment(experiment: dict, config: dict):
-
-    exp_name = experiment["name"]
-    model_name = experiment["model"]
-    strategy = experiment["strategy"]
-    split_name = experiment["split"]
-    label_type = experiment.get("label", "binary")
-
+def prepare_data(split_name: str, label_type: str, config: dict):
     print(f"\n{'='*60}")
-    print(f"  {exp_name} | {model_name} | {strategy} | {split_name} | {label_type}")
+    print(f"  PREPARING DATA | {split_name} | {label_type}")
     print(f"{'='*60}")
 
-    steps = [
-        "Loading data",
-        "Feature selection",
-        "Preprocessing",
-        "Imbalance handling",
-        "Model training",
-        "Saving artifacts",
-    ]
-    pbar = tqdm(
-        total=len(steps),
-        desc=f"[{exp_name}]",
-        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-        ncols=80,
-        leave=True,
-    )
-
-    pbar.set_postfix_str(steps[0])
     X_train, X_val, X_test, y_train, y_val, y_test = load_split(split_name, label_type, config)
-    pbar.update(1)
-
-    pbar.set_postfix_str(steps[1])
+    
     fs_cfg = config["preprocessing"]["feature_selection"]
     selector = FeatureSelector(
         drop_zero_variance=fs_cfg["drop_zero_variance"],
@@ -77,9 +51,7 @@ def train_experiment(experiment: dict, config: dict):
     X_val = selector.transform(X_val)
     X_test = selector.transform(X_test)
     print(f"  Feature selection: {selector.summary()}")
-    pbar.update(1)
 
-    pbar.set_postfix_str(steps[2])
     ds_cfg = config["datasets"][config["active_dataset"]]
     numeric_feats = [c for c in selector.selected_columns_
                      if c in ds_cfg["features"].get("numeric", [])]
@@ -95,9 +67,57 @@ def train_experiment(experiment: dict, config: dict):
     X_val_t = preprocessor.transform(X_val)
     X_test_t = preprocessor.transform(X_test)
     print(f"  Preprocessor fitted. Output shape: {X_train_t.shape}")
-    pbar.update(1)
+    
+    preproc_dir = Path(config["output"]["preprocessors_dir"])
+    preproc_dir.mkdir(parents=True, exist_ok=True)
+    joblib.dump(selector, preproc_dir / f"{split_name}_feature_selector.pkl")
+    joblib.dump(preprocessor, preproc_dir / f"{split_name}_preprocessor.pkl")
 
-    pbar.set_postfix_str(steps[3])
+    return {
+        "X_train_t": X_train_t, "X_val_t": X_val_t, "X_test_t": X_test_t,
+        "y_train": y_train, "y_val": y_val, "y_test": y_test,
+        "selector": selector, "preprocessor": preprocessor
+    }
+
+
+def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = None):
+
+    exp_name = experiment["name"]
+    model_name = experiment["model"]
+    strategy = experiment["strategy"]
+    split_name = experiment["split"]
+    label_type = experiment.get("label", "binary")
+
+    print(f"\n{'='*60}")
+    print(f"  {exp_name} | {model_name} | {strategy} | {split_name} | {label_type}")
+    print(f"{'='*60}")
+    
+    if preprocessed_data is None:
+        preprocessed_data = prepare_data(split_name, label_type, config)
+        
+    X_train_t = preprocessed_data["X_train_t"]
+    X_val_t = preprocessed_data["X_val_t"]
+    X_test_t = preprocessed_data["X_test_t"]
+    y_train = preprocessed_data["y_train"]
+    y_val = preprocessed_data["y_val"]
+    y_test = preprocessed_data["y_test"]
+    selector = preprocessed_data["selector"]
+    preprocessor = preprocessed_data["preprocessor"]
+
+    steps = [
+        "Imbalance handling",
+        "Model training",
+        "Saving artifacts",
+    ]
+    pbar = tqdm(
+        total=len(steps),
+        desc=f"[{exp_name}]",
+        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+        ncols=80,
+        leave=True,
+    )
+
+    pbar.set_postfix_str(steps[0])
     if strategy == "smote":
         X_train_t, y_train = apply_smote(X_train_t, y_train, config)
     elif strategy == "undersampling":
@@ -113,14 +133,14 @@ def train_experiment(experiment: dict, config: dict):
     start = time.perf_counter()
     model.fit(X_train_t, y_train)
     train_time = time.perf_counter() - start
+    model.training_time_s = train_time
     print(f"  Training complete in {train_time:.2f}s")
     pbar.update(1)
 
-    pbar.set_postfix_str(steps[5])
+    pbar.set_postfix_str(steps[2])
     models_dir = Path(config["output"]["models_dir"]) / split_name
     models_dir.mkdir(parents=True, exist_ok=True)
 
-    # PyTorch models (MLP, LSTM) use pickle; sklearn models use joblib
     is_torch_model = model_name in ("mlp", "lstm")
     if is_torch_model:
         import torch
@@ -129,11 +149,6 @@ def train_experiment(experiment: dict, config: dict):
     else:
         model_path = models_dir / f"{exp_name}_{model_name}.pkl"
         joblib.dump(model, model_path)
-
-    preproc_dir = Path(config["output"]["preprocessors_dir"])
-    preproc_dir.mkdir(parents=True, exist_ok=True)
-    joblib.dump(selector, preproc_dir / f"{split_name}_feature_selector.pkl")
-    joblib.dump(preprocessor, preproc_dir / f"{split_name}_preprocessor.pkl")
 
     print(f"  Saved model to {model_path}")
     pbar.set_postfix_str("Done ")
