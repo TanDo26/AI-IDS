@@ -84,7 +84,7 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
 
     exp_name = experiment["name"]
     model_name = experiment["model"]
-    strategy = experiment["strategy"]
+    strategy = experiment.get("strategy")
     split_name = experiment["split"]
     label_type = experiment.get("label", "binary")
 

@@ -216,162 +216,205 @@ imbalance:
 
 # --- Experiments ---
 experiments:
-  # --- Random Split Experiments ---
+  # --- Baseline Experiments ---
   - name: EXP-01
     model: logistic_regression
-    strategy: smote
+    strategy: null
     split: random
     label: binary
   - name: EXP-02
-    model: logistic_regression
-    strategy: undersampling
+    model: random_forest
+    strategy: null
     split: random
     label: binary
   - name: EXP-03
+    model: random_forest_regularized
+    strategy: null
+    split: random
+    label: binary
+  - name: EXP-04
+    model: mlp
+    strategy: null
+    split: random
+    label: binary
+  - name: EXP-05
+    model: logistic_regression
+    strategy: null
+    split: temporal
+    label: binary
+  - name: EXP-06
+    model: random_forest
+    strategy: null
+    split: temporal
+    label: binary
+  - name: EXP-07
+    model: random_forest_regularized
+    strategy: null
+    split: temporal
+    label: binary
+  - name: EXP-08
+    model: lstm
+    strategy: null
+    split: temporal
+    label: binary
+
+
+  # --- Random Split Experiments ---
+  - name: EXP-09
+    model: logistic_regression
+    strategy: smote
+    split: random
+    label: binary
+  - name: EXP-10
+    model: logistic_regression
+    strategy: undersampling
+    split: random
+    label: binary
+  - name: EXP-11
     model: logistic_regression
     strategy: class_weight
     split: random
     label: binary
 
-  - name: EXP-04
+  - name: EXP-12
     model: random_forest
     strategy: smote
     split: random
     label: binary
-  - name: EXP-05
+  - name: EXP-13
     model: random_forest
     strategy: undersampling
     split: random
     label: binary
-  - name: EXP-06
+  - name: EXP-14
     model: random_forest
     strategy: class_weight
     split: random
     label: binary
 
-  - name: EXP-07
+  - name: EXP-15
     model: random_forest_regularized
     strategy: smote
     split: random
     label: binary
-  - name: EXP-08
+  - name: EXP-16
     model: random_forest_regularized
     strategy: undersampling
     split: random
     label: binary
-  - name: EXP-09
+  - name: EXP-17
     model: random_forest_regularized
     strategy: class_weight
     split: random
     label: binary
 
   # --- Temporal Split Experiments ---
-  - name: EXP-10
-    model: logistic_regression
-    strategy: smote
-    split: temporal
-    label: binary
-  - name: EXP-11
-    model: logistic_regression
-    strategy: undersampling
-    split: temporal
-    label: binary
-  - name: EXP-12
-    model: logistic_regression
-    strategy: class_weight
-    split: temporal
-    label: binary
-
-  - name: EXP-13
-    model: random_forest
-    strategy: smote
-    split: temporal
-    label: binary
-  - name: EXP-14
-    model: random_forest
-    strategy: undersampling
-    split: temporal
-    label: binary
-  - name: EXP-15
-    model: random_forest
-    strategy: class_weight
-    split: temporal
-    label: binary
-
-  - name: EXP-16
-    model: random_forest_regularized
-    strategy: smote
-    split: temporal
-    label: binary
-  - name: EXP-17
-    model: random_forest_regularized
-    strategy: undersampling
-    split: temporal
-    label: binary
   - name: EXP-18
+    model: logistic_regression
+    strategy: smote
+    split: temporal
+    label: binary
+  - name: EXP-19
+    model: logistic_regression
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-20
+    model: logistic_regression
+    strategy: class_weight
+    split: temporal
+    label: binary
+
+  - name: EXP-21
+    model: random_forest
+    strategy: smote
+    split: temporal
+    label: binary
+  - name: EXP-22
+    model: random_forest
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-23
+    model: random_forest
+    strategy: class_weight
+    split: temporal
+    label: binary
+
+  - name: EXP-24
+    model: random_forest_regularized
+    strategy: smote
+    split: temporal
+    label: binary
+  - name: EXP-25
+    model: random_forest_regularized
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-26
     model: random_forest_regularized
     strategy: class_weight
     split: temporal
     label: binary
 
   # --- MLP: Multiclass, Random Split ---
-  - name: EXP-19
+  - name: EXP-27
     model: mlp
     strategy: undersampling
     split: random
     label: multiclass
-  - name: EXP-20
+  - name: EXP-28
     model: mlp
     strategy: class_weight
     split: random
     label: multiclass
 
   # --- RF & LG & RF_reg: Multiclass, Random Split ---
-  - name: EXP-21
+  - name: EXP-29
     model: random_forest
     strategy: undersampling
     split: random
     label: multiclass
-  - name: EXP-22
+  - name: EXP-30
     model: random_forest
     strategy: class_weight
     split: random
     label: multiclass
 
-  - name: EXP-23
+  - name: EXP-31
     model: random_forest_regularized
     strategy: undersampling
     split: random
     label: multiclass
-  - name: EXP-24
+  - name: EXP-32
     model: random_forest_regularized
     strategy: class_weight
     split: random
     label: multiclass
 
-  - name: EXP-25
+  - name: EXP-33
     model: logistic_regression
     strategy: undersampling
     split: random
     label: multiclass
-  - name: EXP-26
+  - name: EXP-34
     model: logistic_regression
     strategy: class_weight
     split: random
     label: multiclass
 
   # --- LSTM: Binary, Temporal Split ---
-  - name: EXP-27
+  - name: EXP-35
     model: lstm
     strategy: smote
     split: temporal
     label: binary
-  - name: EXP-28
+  - name: EXP-36
     model: lstm
     strategy: undersampling
     split: temporal
     label: binary
-  - name: EXP-29
+  - name: EXP-37
     model: lstm
     strategy: class_weight
     split: temporal
