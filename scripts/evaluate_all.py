@@ -124,7 +124,7 @@ def main(exp_filter=None):
         "f1_attack", "recall_attack", "fpr", "fnr", "macro_f1", "pr_auc",
         "accuracy", "precision_attack",
         "weighted_f1", "macro_recall", "weighted_recall", "macro_precision", "weighted_precision", "macro_pr_auc", "num_classes",
-        "tp", "fp", "tn", "fn", "inference_time_s",
+        "tp", "fp", "tn", "fn", "training_time_s",
     ]
     col_order = [c for c in col_order if c in df_metrics.columns]
     df_metrics = df_metrics[col_order]
