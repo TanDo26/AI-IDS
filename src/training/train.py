@@ -126,7 +126,7 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
         print("  Using class_weight='balanced' (no resampling)")
     pbar.update(1)
 
-    pbar.set_postfix_str(steps[4])
+    pbar.set_postfix_str(steps[1])
     class_weight = "balanced" if strategy == "class_weight" else None
     model = get_model(model_name, config, class_weight=class_weight)
     print(f"  Training {model_name}...")
