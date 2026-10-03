@@ -161,21 +161,27 @@ AI-IDS/
 │   │   └── torch_wrapper.py         # Sklearn-compatible wrapper for PyTorch
 │   ├── training/
 │   │   └── train.py                 # Train orchestrator (with progress bar)
-│   └── evaluation/
-│       ├── metrics.py               # Binary + multiclass metrics
-│       ├── evaluate.py              # Evaluation orchestration
-│       └── plots.py                 # Confusion matrix + PR curve plots
+│   ├── evaluation/
+│   │   ├── metrics.py               # Binary + multiclass metrics
+│   │   ├── evaluate.py              # Evaluation orchestration
+│   │   └── plots.py                 # Confusion matrix + PR curve plots
+│   └── api/
+│       └── app.py                   # FastAPI inference server
 ├── scripts/
 │   ├── prepare_data.py              # CLI: load → clean → split
 │   ├── train_all.py                 # CLI: train experiments (with --exp filter)
 │   ├── evaluate_all.py              # CLI: evaluate + report (with --exp filter)
-│   └── run_all.py                   # CLI: full pipeline (with --exp filter)
+│   ├── run_all.py                   # CLI: full pipeline (with --exp filter)
+│   ├── optimize_hpo.py              # CLI: hyperparameter optimization (Optuna)
+│   └── xai_analysis.py              # CLI: SHAP explainability analysis
 ├── models/                          # Saved trained models (.pkl / .pt)
 ├── results/
 │   ├── metrics/                     # CSV summary tables
 │   ├── confusion_matrices/          # Heatmap PNGs
-│   └── pr_curves/                   # PR-AUC curve PNGs
-├── Dockerfile                       # Python 3.11 + PyTorch CUDA 12.4
+│   ├── pr_curves/                   # PR-AUC curve PNGs
+│   ├── hpo/                         # HPO results (JSON + plots)
+│   └── xai/                         # SHAP plots + feature importance CSVs
+├── Dockerfile                       # Python 3.14 + PyTorch CUDA 13.0
 ├── docker-compose.yml               # Services with NVIDIA GPU support
 └── requirements.txt
 ```
@@ -269,6 +275,84 @@ After running the pipeline, results are saved to:
 - `results/pr_curves/` — precision-recall curves (PNG)
 - `models/` — saved model files (`.pkl` for Sklearn, `.pt` for PyTorch)
 
+## Extended Features
+
+### Hyperparameter Optimization (HPO)
+
+Automatic hyperparameter tuning using [Optuna](https://optuna.org/). Supports all model types.
+
+```bash
+# Optimize Random Forest (20 trials)
+python scripts/optimize_hpo.py --model random_forest --trials 20
+
+# Optimize MLP with temporal split
+python scripts/optimize_hpo.py --model mlp --split temporal --trials 30
+
+# Optimize Logistic Regression for multiclass
+python scripts/optimize_hpo.py --model logistic_regression --label multiclass --trials 50
+
+# Docker
+docker compose run --rm hpo --model random_forest --trials 20
+```
+
+Results (best params + all trial history) are saved to `results/hpo/` as JSON files.
+
+### Explainable AI (XAI)
+
+Model interpretability analysis using [SHAP](https://shap.readthedocs.io/).
+
+```bash
+# Explain best Random Forest model
+python scripts/xai_analysis.py --exp EXP-02 --model random_forest
+
+# Explain multiclass model with more samples
+python scripts/xai_analysis.py --exp EXP-10 --model random_forest --label multiclass --samples 2000
+
+# Docker
+docker compose run --rm xai --exp EXP-02 --model random_forest
+```
+
+Outputs saved to `results/xai/`:
+- **Summary plot** — beeswarm showing feature impact direction & magnitude
+- **Bar plot** — mean |SHAP| ranking of features
+- **Waterfall plot** — explains a single prediction (binary only)
+- **Feature importance CSV** — ranked table of all features
+
+### Inference API
+
+Real-time prediction API using [FastAPI](https://fastapi.tiangolo.com/).
+
+```bash
+# Run locally
+cd src/api && python app.py
+
+# Or with environment variable config
+IDS_EXP_NAME=EXP-02 IDS_MODEL_TYPE=random_forest python -m uvicorn src.api.app:app --port 8000
+
+# Docker
+docker compose up api
+```
+
+**Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | Service info |
+| `GET` | `/health` | Health check (model status) |
+| `POST` | `/predict` | Predict single flow |
+| `POST` | `/batch_predict` | Predict multiple flows |
+
+Swagger UI available at `http://localhost:8000/docs`.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IDS_EXP_NAME` | `EXP-02` | Experiment name to load |
+| `IDS_MODEL_TYPE` | `random_forest` | Model type |
+| `IDS_SPLIT` | `random` | Split type |
+| `IDS_LABEL_TYPE` | `binary` | Label type |
+
 ## Configuration
 
 All experiment parameters are controlled via [`configs/config.yaml`](configs/config.yaml):
@@ -298,4 +382,9 @@ joblib>=1.3
 tqdm>=4.65
 pyarrow>=14.0
 torch>=2.0
+optuna>=3.6.0
+shap>=0.45.0
+fastapi>=0.110.0
+uvicorn>=0.29.0
+pydantic>=2.7.0
 ```
