@@ -38,4 +38,28 @@ services:
   run-all:
     extends:
       service: ids
-    command: ["scripts/run_all.py"]
+    command: ["scripts/run_all.py"]
+
+  hpo:
+    extends:
+      service: ids
+    command: ["scripts/optimize_hpo.py"]
+
+  xai:
+    extends:
+      service: ids
+    command: ["scripts/xai_analysis.py"]
+
+  api:
+    extends:
+      service: ids
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - IDS_EXP_NAME=EXP-02
+      - IDS_MODEL_TYPE=random_forest
+      - IDS_SPLIT=random
+      - IDS_LABEL_TYPE=binary
+    entrypoint: ["python", "-m", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: []
