@@ -21,6 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.training.train import prepare_data
 from src.preprocessing.artifacts import get_fs_profile
+from src.models.label_encoded import LabelEncodedClassifier
 
 try:
     import shap
@@ -52,36 +53,40 @@ def load_model(exp_name, model_type, split_name, config):
         return joblib.load(model_path)
 
 
+def _per_class_outputs(shap_values, label_type):
+    """Binary -> SHAP values of the Attack class; multiclass -> list of (n_samples, n_features), one per class."""
+    if label_type == "binary":
+        if isinstance(shap_values, list):
+            return shap_values[1]  # Attack class
+        elif hasattr(shap_values, "shape") and len(shap_values.shape) == 3:
+            return shap_values[:, :, 1]
+        return shap_values
+    if hasattr(shap_values, "shape") and len(shap_values.shape) == 3:
+        # Convert (n_samples, n_features, n_classes) to list of (n_samples, n_features)
+        return [shap_values[:, :, i] for i in range(shap_values.shape[2])]
+    return shap_values
+
+
 def compute_shap_values(model, model_type, X_sample, label_type):
     """Compute SHAP values using the appropriate explainer for the model type."""
-    if model_type in ("random_forest", "random_forest_regularized"):
+    if model_type in ("random_forest", "random_forest_regularized", "xgboost"):
+        # XGBoost is wrapped in LabelEncodedClassifier; explain the fitted booster inside.
+        # (Not getattr(model, "estimator_"): RandomForest's estimator_ is its unfitted template tree.)
+        if isinstance(model, LabelEncodedClassifier):
+            model = model.estimator_
         explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_sample)
-
-        if label_type == "binary":
-            if isinstance(shap_values, list):
-                return shap_values[1]  # Attack class
-            elif hasattr(shap_values, "shape") and len(shap_values.shape) == 3:
-                return shap_values[:, :, 1]
-            return shap_values
-        else:
-            # Multiclass RF
-            if hasattr(shap_values, "shape") and len(shap_values.shape) == 3:
-                # Convert (n_samples, n_features, n_classes) to list of (n_samples, n_features)
-                return [shap_values[:, :, i] for i in range(shap_values.shape[2])]
-            return shap_values
+        return _per_class_outputs(explainer.shap_values(X_sample), label_type)
 
     elif model_type == "logistic_regression":
         explainer = shap.LinearExplainer(model, X_sample)
         return explainer.shap_values(X_sample)
 
     else:
+        # Model-agnostic (Naive Bayes, MLP, LSTM): KernelExplainer is slow, so only the first 200 rows
         background = shap.kmeans(X_sample, 50)
         explainer = shap.KernelExplainer(model.predict_proba, background)
-        shap_values = explainer.shap_values(X_sample[:200])  # Limit samples for speed
-        if label_type == "binary" and isinstance(shap_values, list):
-            return shap_values[1]
-        return shap_values
+        shap_values = explainer.shap_values(X_sample[:200])
+        return _per_class_outputs(shap_values, label_type)
 
 
 def plot_summary(shap_values, X_sample, feature_names, output_path, label_type):
@@ -190,6 +195,10 @@ def main(exp_name, model_type, split_name, label_type, n_samples, fs_profile="no
     # 3. Compute SHAP values
     print("  Computing SHAP values (this may take a few minutes)...")
     shap_values = compute_shap_values(model, model_type, X_sample, label_type)
+
+    # KernelExplainer explains only the first rows; plot against the same rows
+    n_explained = len(shap_values[0] if isinstance(shap_values, list) else shap_values)
+    X_sample = X_sample[:n_explained]
 
     # 4. Generate outputs
     output_dir = PROJECT_ROOT / "results" / "xai"
