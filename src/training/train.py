@@ -10,8 +10,9 @@ from tqdm import tqdm
 
 
 from src.data.split_data import _get_feature_columns
-from src.preprocessing.feature_selection import FeatureSelector
+from src.preprocessing.feature_selection import build_feature_selector
 from src.preprocessing.build_preprocessor import build_preprocessor
+from src.preprocessing.artifacts import get_fs_profile, preprocessing_artifact_paths
 from src.imbalance.smote import apply_smote
 from src.imbalance.undersampling import apply_undersampling
 from src.models.registry import get_model
@@ -34,22 +35,19 @@ def load_split(split_name: str, label_type: str, config: dict):
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
-def prepare_data(split_name: str, label_type: str, config: dict):
-    print(f"\n{'='*60}")
-    print(f"  PREPARING DATA | {split_name} | {label_type}")
-    print(f"{'='*60}")
+TORCH_MODELS = ("mlp", "lstm")
 
-    X_train, X_val, X_test, y_train, y_val, y_test = load_split(split_name, label_type, config)
-    
-    fs_cfg = config["preprocessing"]["feature_selection"]
-    selector = FeatureSelector(
-        drop_zero_variance=fs_cfg["drop_zero_variance"],
-        drop_high_correlation=fs_cfg["drop_high_correlation"],
-        correlation_threshold=fs_cfg["correlation_threshold"],
-    )
-    X_train = selector.fit_transform(X_train)
-    X_val = selector.transform(X_val)
-    X_test = selector.transform(X_test)
+
+def model_artifact_path(config: dict, experiment: dict) -> Path:
+    model_name = experiment["model"]
+    ext = ".pt" if model_name in TORCH_MODELS else ".pkl"
+    return (Path(config["output"]["models_dir"]) / experiment["split"]
+            / f"{experiment['name']}_{model_name}{ext}")
+
+
+def _fit_preprocessing(X_train, y_train, config: dict, fs_profile: str):
+    selector = build_feature_selector(config, fs_profile)
+    X_train = selector.fit_transform(X_train, y_train)
     print(f"  Feature selection: {selector.summary()}")
 
     ds_cfg = config["datasets"][config["active_dataset"]]
@@ -63,20 +61,44 @@ def prepare_data(split_name: str, label_type: str, config: dict):
         categorical_feats if categorical_feats else None,
         config,
     )
-    X_train_t = preprocessor.fit_transform(X_train)
-    X_val_t = preprocessor.transform(X_val)
-    X_test_t = preprocessor.transform(X_test)
-    print(f"  Preprocessor fitted. Output shape: {X_train_t.shape}")
-    
-    preproc_dir = Path(config["output"]["preprocessors_dir"])
-    preproc_dir.mkdir(parents=True, exist_ok=True)
-    joblib.dump(selector, preproc_dir / f"{split_name}_feature_selector.pkl")
-    joblib.dump(preprocessor, preproc_dir / f"{split_name}_preprocessor.pkl")
+    preprocessor.fit(X_train)
+    return selector, preprocessor
+
+
+def prepare_data(split_name: str, label_type: str, config: dict,
+                 fs_profile: str = "none", save_artifacts: bool = True,
+                 reuse_existing: bool = False):
+    print(f"\n{'='*60}")
+    print(f"  PREPARING DATA | {split_name} | {label_type} | fs={fs_profile}")
+    print(f"{'='*60}")
+
+    X_train, X_val, X_test, y_train, y_val, y_test = load_split(split_name, label_type, config)
+
+    selector_path, preprocessor_path = preprocessing_artifact_paths(
+        config, split_name, label_type, fs_profile)
+
+    if reuse_existing and selector_path.exists() and preprocessor_path.exists():
+        selector = joblib.load(selector_path)
+        preprocessor = joblib.load(preprocessor_path)
+        print(f"  Reusing saved preprocessing: {selector_path.name}, {preprocessor_path.name}")
+    else:
+        selector, preprocessor = _fit_preprocessing(X_train, y_train, config, fs_profile)
+        # Analysis runs (HPO, XAI)
+        if save_artifacts:
+            selector_path.parent.mkdir(parents=True, exist_ok=True)
+            joblib.dump(selector, selector_path)
+            joblib.dump(preprocessor, preprocessor_path)
+
+    X_train_t = preprocessor.transform(selector.transform(X_train))
+    X_val_t = preprocessor.transform(selector.transform(X_val))
+    X_test_t = preprocessor.transform(selector.transform(X_test))
+    print(f"  Preprocessing ready. Output shape: {X_train_t.shape}")
 
     return {
         "X_train_t": X_train_t, "X_val_t": X_val_t, "X_test_t": X_test_t,
         "y_train": y_train, "y_val": y_val, "y_test": y_test,
-        "selector": selector, "preprocessor": preprocessor
+        "selector": selector, "preprocessor": preprocessor,
+        "fs_profile": fs_profile,
     }
 
 
@@ -87,13 +109,14 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
     strategy = experiment.get("strategy")
     split_name = experiment["split"]
     label_type = experiment.get("label", "binary")
+    fs_profile = get_fs_profile(experiment)
 
     print(f"\n{'='*60}")
-    print(f"  {exp_name} | {model_name} | {strategy} | {split_name} | {label_type}")
+    print(f"  {exp_name} | {model_name} | {strategy} | {split_name} | {label_type} | fs={fs_profile}")
     print(f"{'='*60}")
-    
+
     if preprocessed_data is None:
-        preprocessed_data = prepare_data(split_name, label_type, config)
+        preprocessed_data = prepare_data(split_name, label_type, config, fs_profile)
         
     X_train_t = preprocessed_data["X_train_t"]
     X_val_t = preprocessed_data["X_val_t"]
@@ -138,16 +161,13 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
     pbar.update(1)
 
     pbar.set_postfix_str(steps[2])
-    models_dir = Path(config["output"]["models_dir"]) / split_name
-    models_dir.mkdir(parents=True, exist_ok=True)
+    model_path = model_artifact_path(config, experiment)
+    model_path.parent.mkdir(parents=True, exist_ok=True)
 
-    is_torch_model = model_name in ("mlp", "lstm")
-    if is_torch_model:
+    if model_name in TORCH_MODELS:
         import torch
-        model_path = models_dir / f"{exp_name}_{model_name}.pt"
         torch.save(model, model_path)
     else:
-        model_path = models_dir / f"{exp_name}_{model_name}.pkl"
         joblib.dump(model, model_path)
 
     print(f"  Saved model to {model_path}")

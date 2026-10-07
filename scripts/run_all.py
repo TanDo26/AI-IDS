@@ -27,6 +27,11 @@ def main():
         "--skip-prepare", action="store_true",
         help="Skip data preparation phase (useful when data is already prepared)"
     )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Retrain experiments that already have a model and refit preprocessing "
+             "(use after changing the data or config)"
+    )
     args = parser.parse_args()
     exp_filter = parse_exp_filter(args.exp)
 
@@ -49,7 +54,7 @@ def main():
     print("\n" + "=" * 70)
     print("  PHASE 2: MODEL TRAINING".center(70))
     print("=" * 70)
-    train(exp_filter=exp_filter)
+    train(exp_filter=exp_filter, force=args.force)
 
     print("\n" + "=" * 70)
     print("  PHASE 3: EVALUATION".center(70))

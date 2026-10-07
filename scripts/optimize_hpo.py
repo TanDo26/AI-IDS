@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.training.train import prepare_data
+from src.preprocessing.artifacts import get_fs_profile
 
 # ──────────────────────────────────────────────
 # Search spaces per model
@@ -142,10 +143,10 @@ def make_objective(model_name, X_train, y_train, X_val, y_val, config):
 # ──────────────────────────────────────────────
 
 def resolve_experiment(config, exp_name):
-    """Look up an experiment by name in config.yaml and return (model, split, label)."""
+    """Look up an experiment by name in config.yaml and return (model, split, label, fs_profile)."""
     for exp in config.get("experiments", []):
         if exp["name"] == exp_name:
-            return exp["model"], exp["split"], exp.get("label", "binary")
+            return exp["model"], exp["split"], exp.get("label", "binary"), get_fs_profile(exp)
     available = [e["name"] for e in config.get("experiments", [])]
     raise ValueError(f"Experiment '{exp_name}' not found. Available: {available}")
 
@@ -154,7 +155,7 @@ def resolve_experiment(config, exp_name):
 # Main
 # ──────────────────────────────────────────────
 
-def main(model_name, split_name, label_type, n_trials):
+def main(model_name, split_name, label_type, n_trials, fs_profile="none"):
     config_path = PROJECT_ROOT / "configs" / "config.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -165,12 +166,18 @@ def main(model_name, split_name, label_type, n_trials):
         return
 
     print("=" * 60)
-    print(f"  HPO | {model_name} | {split_name} | {label_type} | {n_trials} trials")
+    print(f"  HPO | {model_name} | {split_name} | {label_type} | fs={fs_profile} | {n_trials} trials")
     print("=" * 60)
 
-    # 1. Load & preprocess data (reuses existing pipeline)
+    # Keep pre-existing file names for the default profile
+    run_tag = f"{model_name}_{split_name}_{label_type}"
+    if fs_profile != "none":
+        run_tag += f"_{fs_profile}"
+
+    # 1. Load & preprocess data (reuses existing pipeline; never overwrites training artifacts)
     print("Loading and preprocessing data...")
-    preprocessed_data = prepare_data(split_name, label_type, config)
+    preprocessed_data = prepare_data(split_name, label_type, config, fs_profile,
+                                     save_artifacts=False)
     X_train = preprocessed_data["X_train_t"]
     y_train = preprocessed_data["y_train"]
     X_val = preprocessed_data["X_val_t"]
@@ -179,7 +186,7 @@ def main(model_name, split_name, label_type, n_trials):
     # 2. Run Optuna study
     study = optuna.create_study(
         direction="maximize",
-        study_name=f"hpo_{model_name}_{split_name}_{label_type}",
+        study_name=f"hpo_{run_tag}",
     )
 
     objective_fn = make_objective(model_name, X_train, y_train, X_val, y_val, config)
@@ -207,6 +214,7 @@ def main(model_name, split_name, label_type, n_trials):
         "model": model_name,
         "split": split_name,
         "label": label_type,
+        "feature_selection": fs_profile,
         "n_trials": n_trials,
         "best_trial_number": best.number,
         "best_macro_f1": best.value,
@@ -223,7 +231,7 @@ def main(model_name, split_name, label_type, n_trials):
         ],
     }
 
-    result_path = output_dir / f"{model_name}_{split_name}_{label_type}.json"
+    result_path = output_dir / f"{run_tag}.json"
     with open(result_path, "w", encoding="utf-8") as f:
         json.dump(result_data, f, indent=2, ensure_ascii=False, default=str)
     print(f"\n  Results saved to: {result_path}")
@@ -236,11 +244,11 @@ def main(model_name, split_name, label_type, n_trials):
         )
 
         fig_hist = plot_optimization_history(study)
-        fig_hist.write_image(str(output_dir / f"{model_name}_{split_name}_{label_type}_history.png"))
+        fig_hist.write_image(str(output_dir / f"{run_tag}_history.png"))
 
         if n_trials >= 5:
             fig_imp = plot_param_importances(study)
-            fig_imp.write_image(str(output_dir / f"{model_name}_{split_name}_{label_type}_importances.png"))
+            fig_imp.write_image(str(output_dir / f"{run_tag}_importances.png"))
 
         print("  Optuna plots saved.")
     except ImportError:
@@ -266,6 +274,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--split", type=str, default=None, help="Split type (random/temporal)")
     parser.add_argument("--label", type=str, default=None, help="Label type (binary/multiclass)")
+    parser.add_argument("--fs", type=str, default=None,
+                        help="Feature-selection profile from config.yaml (default: none)")
     parser.add_argument("--trials", "-n", type=int, default=20, help="Number of trials to run")
     args = parser.parse_args()
 
@@ -274,19 +284,22 @@ if __name__ == "__main__":
         config_path = PROJECT_ROOT / "configs" / "config.yaml"
         with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
-        exp_model, exp_split, exp_label = resolve_experiment(config, args.exp)
+        exp_model, exp_split, exp_label, exp_fs = resolve_experiment(config, args.exp)
         model_name = args.model or exp_model
         split_name = args.split or exp_split
         label_type = args.label or exp_label
+        fs_profile = args.fs or exp_fs
     else:
         model_name = args.model or "random_forest"
         split_name = args.split or "random"
         label_type = args.label or "binary"
+        fs_profile = args.fs or "none"
 
     main(
         model_name=model_name,
         split_name=split_name,
         label_type=label_type,
         n_trials=args.trials,
+        fs_profile=fs_profile,
     )
 
