@@ -144,7 +144,7 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
     if strategy == "smote":
         X_train_t, y_train = apply_smote(X_train_t, y_train, config)
     elif strategy == "undersampling":
-        X_train_t, y_train = apply_undersampling(X_train_t, y_train, config)
+        X_train_t, y_train = apply_undersampling(X_train_t, y_train, config, label_type)
     elif strategy == "class_weight":
         print("  Using class_weight='balanced' (no resampling)")
     pbar.update(1)
