@@ -7,6 +7,7 @@ import joblib
 from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
+from sklearn.utils.class_weight import compute_sample_weight
 
 
 from src.data.split_data import _get_feature_columns
@@ -36,6 +37,7 @@ def load_split(split_name: str, label_type: str, config: dict):
 
 
 TORCH_MODELS = ("mlp", "lstm")
+SAMPLE_WEIGHT_MODELS = ("naive_bayes", "xgboost")
 
 
 def model_artifact_path(config: dict, experiment: dict) -> Path:
@@ -152,13 +154,23 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
     pbar.set_postfix_str(steps[1])
     class_weight = "balanced" if strategy == "class_weight" else None
     model = get_model(model_name, config, class_weight=class_weight)
+
+    # These models have no class_weight parameter, so balancing goes through fit()
+    fit_kwargs = {}
+    if class_weight and model_name in SAMPLE_WEIGHT_MODELS:
+        fit_kwargs["sample_weight"] = compute_sample_weight("balanced", y_train)
+
     print(f"  Training {model_name}...")
     start = time.perf_counter()
-    model.fit(X_train_t, y_train)
+    model.fit(X_train_t, y_train, **fit_kwargs)
     train_time = time.perf_counter() - start
     model.training_time_s = train_time
     print(f"  Training complete in {train_time:.2f}s")
     pbar.update(1)
+
+    if model_name == "xgboost":
+        # Saved models must also load on CPU-only machines
+        model.estimator_.set_params(device="cpu")
 
     pbar.set_postfix_str(steps[2])
     model_path = model_artifact_path(config, experiment)
