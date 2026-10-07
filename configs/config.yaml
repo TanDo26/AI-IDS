@@ -144,21 +144,21 @@ preprocessing:
   handle_inf: replace_with_nan
   imputer_strategy: median
   scaling: standard
-  feature_selection:              # base filters, applied in every profile
+  feature_selection:              
     drop_zero_variance: true
     drop_high_correlation: true
     correlation_threshold: 0.95
-  feature_selection_profiles:     # referenced by experiments[].feature_selection (default: none)
+  feature_selection_profiles:     
     none:
       method: none
-    pearson:                      # not implemented yet (plan step A.2)
+    pearson:                      
       method: pearson
-      threshold: 0.05             # keep features with |r| >= threshold ...
-      top_k: null                 # ... or, if set, keep the top K instead
-    mi:                           # not implemented yet (plan step A.2)
+      threshold: 0.05           
+      top_k: null                
+    mi:                        
       method: mutual_info
-      top_k: 30
-      sample_size: 200000         # stratified subsample used to score MI
+      top_k: 30               
+      sample_size: 200000    
       random_state: 42
 
 # --- Splitting ---
