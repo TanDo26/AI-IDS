@@ -13,13 +13,14 @@ import joblib
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use("Agg")  # Non-interactive backend (headless server support)
+matplotlib.use("Agg")  
 import matplotlib.pyplot as plt
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.training.train import prepare_data
+from src.preprocessing.artifacts import get_fs_profile
 
 try:
     import shap
@@ -75,8 +76,6 @@ def compute_shap_values(model, model_type, X_sample, label_type):
         return explainer.shap_values(X_sample)
 
     else:
-        # PyTorch models (MLP, LSTM) — use KernelExplainer (model-agnostic, slower)
-        # Use a smaller background set for performance
         background = shap.kmeans(X_sample, 50)
         explainer = shap.KernelExplainer(model.predict_proba, background)
         shap_values = explainer.shap_values(X_sample[:200])  # Limit samples for speed
@@ -89,7 +88,6 @@ def plot_summary(shap_values, X_sample, feature_names, output_path, label_type):
     """SHAP beeswarm summary plot."""
     plt.figure(figsize=(12, 8))
     if label_type == "multiclass" and isinstance(shap_values, list):
-        # For multiclass, use the mean absolute SHAP across all classes
         mean_abs_shap = np.mean([np.abs(sv) for sv in shap_values], axis=0)
         shap.summary_plot(mean_abs_shap, X_sample, feature_names=feature_names, show=False)
     else:
@@ -164,13 +162,13 @@ def export_top_features(shap_values, feature_names, output_path, top_n=20):
         print(f"  {rank:<6} {row['Feature']:<30} {row['Mean_Abs_SHAP']:<15.6f}")
 
 
-def main(exp_name, model_type, split_name, label_type, n_samples):
+def main(exp_name, model_type, split_name, label_type, n_samples, fs_profile="none"):
     config_path = PROJECT_ROOT / "configs" / "config.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     print("=" * 60)
-    print(f"  XAI | {exp_name} | {model_type} | {split_name} | {label_type}")
+    print(f"  XAI | {exp_name} | {model_type} | {split_name} | {label_type} | fs={fs_profile}")
     print("=" * 60)
 
     # 1. Load model
@@ -179,7 +177,8 @@ def main(exp_name, model_type, split_name, label_type, n_samples):
 
     # 2. Load & preprocess data
     print("  Preparing data...")
-    preprocessed_data = prepare_data(split_name, label_type, config)
+    preprocessed_data = prepare_data(split_name, label_type, config, fs_profile,
+                                     save_artifacts=False)
     X_test = preprocessed_data["X_test_t"]
     selector = preprocessed_data["selector"]
     feature_names = selector.selected_columns_
@@ -270,8 +269,9 @@ if __name__ == "__main__":
         model_type = exp_cfg["model"]
         split_name = exp_cfg["split"]
         label_type = exp_cfg.get("label", "binary")
-        
+
         try:
-            main(exp_name, model_type, split_name, label_type, args.samples)
+            main(exp_name, model_type, split_name, label_type, args.samples,
+                 get_fs_profile(exp_cfg))
         except Exception as e:
             print(f"Error running XAI for {exp_name}: {e}")

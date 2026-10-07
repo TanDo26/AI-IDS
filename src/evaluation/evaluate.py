@@ -5,6 +5,7 @@ Model evaluation utilities for the GeNIS IDS pipeline.
 import time
 import pandas as pd
 from .metrics import calculate_metrics
+from src.preprocessing.artifacts import get_fs_profile
 
 
 def evaluate_experiment(model, X_test, y_test, experiment: dict,
@@ -34,6 +35,7 @@ def evaluate_experiment(model, X_test, y_test, experiment: dict,
         "strategy": strategy,
         "split": split_name,
         "label": label_type,
+        "feature_selection": get_fs_profile(experiment),
         "training_time_s": round(getattr(model, "training_time_s", 0.0), 4),
     })
 

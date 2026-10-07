@@ -61,5 +61,6 @@ services:
       - IDS_MODEL_TYPE=random_forest
       - IDS_SPLIT=random
       - IDS_LABEL_TYPE=binary
+      - IDS_FEATURE_SELECTION=none
     entrypoint: ["python", "-m", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
     command: []

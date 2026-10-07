@@ -18,7 +18,7 @@ class FeatureSelector:
         self.dropped_zero_var_ = []
         self.dropped_corr_ = []
 
-    def fit(self, X_train: pd.DataFrame):
+    def fit(self, X_train: pd.DataFrame, y_train=None):
 
         cols_to_keep = list(X_train.columns)
 
@@ -53,8 +53,8 @@ class FeatureSelector:
 
         return X[self.selected_columns_].copy()
 
-    def fit_transform(self, X_train):
-        return self.fit(X_train).transform(X_train)
+    def fit_transform(self, X_train, y_train=None):
+        return self.fit(X_train, y_train).transform(X_train)
 
     def summary(self) -> str:
         lines = [
@@ -71,3 +71,26 @@ class FeatureSelector:
         ]
 
         return "\n".join(lines)
+
+
+def build_feature_selector(config: dict, fs_profile: str = "none") -> FeatureSelector:
+    """Build a FeatureSelector from the base filters + a named feature-selection profile."""
+    pp_cfg = config["preprocessing"]
+    fs_cfg = pp_cfg["feature_selection"]
+    profiles = pp_cfg.get("feature_selection_profiles", {"none": {"method": "none"}})
+
+    if fs_profile not in profiles:
+        available = ", ".join(profiles)
+        raise ValueError(f"Unknown feature_selection profile '{fs_profile}'. Available: {available}")
+
+    method = profiles[fs_profile].get("method", "none")
+    if method != "none":
+        raise NotImplementedError(
+            f"Feature selection method '{method}' (profile '{fs_profile}') is not implemented yet."
+        )
+
+    return FeatureSelector(
+        drop_zero_variance=fs_cfg["drop_zero_variance"],
+        drop_high_correlation=fs_cfg["drop_high_correlation"],
+        correlation_threshold=fs_cfg["correlation_threshold"],
+    )

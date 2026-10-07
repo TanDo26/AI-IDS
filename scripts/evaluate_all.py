@@ -16,6 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.training.train import load_split
 from src.preprocessing.feature_selection import FeatureSelector
+from src.preprocessing.artifacts import get_fs_profile, preprocessing_artifact_paths
 from src.evaluation.evaluate import evaluate_experiment
 from src.evaluation.plots import plot_confusion_matrix, plot_pr_curve
 from scripts.train_all import parse_exp_filter, filter_experiments
@@ -54,10 +55,17 @@ def main(exp_filter=None):
         model_name = experiment["model"]
         split_name = experiment["split"]
         label_type = experiment.get("label", "binary")
+        fs_profile = get_fs_profile(experiment)
 
-        preproc_dir = Path(config["output"]["preprocessors_dir"])
-        selector = joblib.load(preproc_dir / f"{split_name}_feature_selector.pkl")
-        preprocessor = joblib.load(preproc_dir / f"{split_name}_preprocessor.pkl")
+        selector_path, preprocessor_path = preprocessing_artifact_paths(
+            config, split_name, label_type, fs_profile)
+        if not selector_path.exists() or not preprocessor_path.exists():
+            raise FileNotFoundError(
+                f"{exp_name}: missing preprocessing artifacts {selector_path.name} / "
+                f"{preprocessor_path.name}. Train the experiment first."
+            )
+        selector = joblib.load(selector_path)
+        preprocessor = joblib.load(preprocessor_path)
 
         _, _, X_test, _, _, y_test = load_split(split_name, label_type, config)
         
@@ -119,8 +127,11 @@ def main(exp_filter=None):
     else:
         df_metrics = df_new
 
+    # Rows written before feature-selection profiles existed used the base filters only
+    df_metrics["feature_selection"] = df_metrics["feature_selection"].fillna("none")
+
     col_order = [
-        "experiment", "model", "strategy", "split", "label",
+        "experiment", "model", "strategy", "split", "label", "feature_selection",
         "f1_attack", "recall_attack", "fpr", "fnr", "macro_f1", "pr_auc",
         "accuracy", "precision_attack",
         "weighted_f1", "macro_recall", "weighted_recall", "macro_precision", "weighted_precision", "macro_pr_auc", "num_classes",

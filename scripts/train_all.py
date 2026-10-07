@@ -5,14 +5,14 @@ import sys
 import time
 import argparse
 from pathlib import Path
-from src.training.train import prepare_data
 
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.training.train import train_experiment
+from src.training.train import prepare_data, train_experiment, model_artifact_path
+from src.preprocessing.artifacts import get_fs_profile
 
 
 def parse_exp_filter(exp_str):
@@ -38,7 +38,7 @@ def filter_experiments(experiments, exp_filter):
     return [e for e in experiments if e["name"] in exp_filter]
 
 
-def main(exp_filter=None):
+def main(exp_filter=None, force=False):
     config_path = PROJECT_ROOT / "configs" / "config.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -61,12 +61,23 @@ def main(exp_filter=None):
 
     grouped_experiments = {}
     for exp in experiments:
-        key = (exp["split"], exp.get("label", "binary"))
+        key = (exp["split"], exp.get("label", "binary"), get_fs_profile(exp))
         grouped_experiments.setdefault(key, []).append(exp)
 
-    for (split_name, label_type), exps in grouped_experiments.items():
-        preprocessed_data = prepare_data(split_name, label_type, config)
-        
+    skipped = []
+    for (split_name, label_type, fs_profile), exps in grouped_experiments.items():
+        if not force:
+            for exp in exps:
+                if model_artifact_path(config, exp).exists():
+                    print(f"  Skipping {exp['name']}: model already exists (use --force to retrain)")
+                    skipped.append(exp["name"])
+            exps = [e for e in exps if e["name"] not in skipped]
+        if not exps:
+            continue
+
+        preprocessed_data = prepare_data(split_name, label_type, config, fs_profile,
+                                         reuse_existing=not force)
+
         for experiment in exps:
             result = train_experiment(experiment, config, preprocessed_data)
             all_results.append({
@@ -78,7 +89,8 @@ def main(exp_filter=None):
 
     elapsed = time.perf_counter() - start
     print(f"\n{'='*70}")
-    print(f"  All training complete in {elapsed:.1f}s")
+    print(f"  All training complete in {elapsed:.1f}s "
+          f"({len(all_results)} trained, {len(skipped)} skipped)")
     print(f"{'='*70}")
 
 
@@ -89,6 +101,11 @@ if __name__ == "__main__":
         type=str, default=".",
         help="Experiment filter: '.' for all, '15' for EXP-15, '10-13' for range, '5,8,12' for list"
     )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Retrain experiments that already have a model and refit preprocessing "
+             "(use after changing the data or config)"
+    )
     args = parser.parse_args()
     exp_filter = parse_exp_filter(args.exp)
-    main(exp_filter=exp_filter)
+    main(exp_filter=exp_filter, force=args.force)

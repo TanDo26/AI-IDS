@@ -21,6 +21,8 @@ import uvicorn
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.preprocessing.artifacts import preprocessing_artifact_paths
+
 
 # ──────────────────────────────────────────────
 # Request / Response schemas
@@ -70,6 +72,7 @@ def load_system():
     model_type = os.environ.get("IDS_MODEL_TYPE", "random_forest")
     split_name = os.environ.get("IDS_SPLIT", "random")
     state.label_type = os.environ.get("IDS_LABEL_TYPE", "binary")
+    fs_profile = os.environ.get("IDS_FEATURE_SELECTION", "none")
 
     config_path = PROJECT_ROOT / "configs" / "config.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
@@ -77,14 +80,13 @@ def load_system():
 
     # Paths
     models_dir = PROJECT_ROOT / state.config["output"]["models_dir"] / split_name
-    preproc_dir = PROJECT_ROOT / state.config["output"]["preprocessors_dir"]
 
     # Determine model file extension
     is_torch = model_type in ("mlp", "lstm")
     ext = ".pt" if is_torch else ".pkl"
     model_path = models_dir / f"{exp_name}_{model_type}{ext}"
-    selector_path = preproc_dir / f"{split_name}_feature_selector.pkl"
-    preprocessor_path = preproc_dir / f"{split_name}_preprocessor.pkl"
+    selector_path, preprocessor_path = preprocessing_artifact_paths(
+        state.config, split_name, state.label_type, fs_profile, root=PROJECT_ROOT)
 
     for path in [model_path, selector_path, preprocessor_path]:
         if not path.exists():
