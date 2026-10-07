@@ -222,6 +222,7 @@ imbalance:
   undersampling:
     method: RandomUnderSampler
     sampling_strategy: auto
+    multiclass_max_per_class: 100000
     random_state: 42
   class_weight:
     type: balanced
