@@ -467,6 +467,184 @@ experiments:
     split: temporal
     label: binary
 
+  # --- Naive Bayes ---
+  - name: EXP-42
+    model: naive_bayes
+    strategy: null
+    split: random
+    label: binary
+  - name: EXP-43
+    model: naive_bayes
+    strategy: undersampling
+    split: random
+    label: binary
+  - name: EXP-44
+    model: naive_bayes
+    strategy: class_weight
+    split: random
+    label: binary
+
+  - name: EXP-45
+    model: naive_bayes
+    strategy: null
+    split: temporal
+    label: binary
+  - name: EXP-46
+    model: naive_bayes
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-47
+    model: naive_bayes
+    strategy: class_weight
+    split: temporal
+    label: binary
+
+  - name: EXP-48
+    model: naive_bayes
+    strategy: null
+    split: random
+    label: multiclass
+  - name: EXP-49
+    model: naive_bayes
+    strategy: undersampling
+    split: random
+    label: multiclass
+  - name: EXP-50
+    model: naive_bayes
+    strategy: class_weight
+    split: random
+    label: multiclass
+
+  # --- XGBoost ---
+  - name: EXP-51
+    model: xgboost
+    strategy: null
+    split: random
+    label: binary
+  - name: EXP-52
+    model: xgboost
+    strategy: undersampling
+    split: random
+    label: binary
+  - name: EXP-53
+    model: xgboost
+    strategy: class_weight
+    split: random
+    label: binary
+
+  - name: EXP-54
+    model: xgboost
+    strategy: null
+    split: temporal
+    label: binary
+  - name: EXP-55
+    model: xgboost
+    strategy: undersampling
+    split: temporal
+    label: binary
+  - name: EXP-56
+    model: xgboost
+    strategy: class_weight
+    split: temporal
+    label: binary
+
+  - name: EXP-57
+    model: xgboost
+    strategy: null
+    split: random
+    label: multiclass
+  - name: EXP-58
+    model: xgboost
+    strategy: undersampling
+    split: random
+    label: multiclass
+  - name: EXP-59
+    model: xgboost
+    strategy: class_weight
+    split: random
+    label: multiclass
+
+  # --- Feature selection: RF (baselines EXP-02 / EXP-10 / EXP-06) ---
+  - name: EXP-60
+    model: random_forest
+    strategy: null
+    split: random
+    label: binary
+    feature_selection: pearson
+  - name: EXP-61
+    model: random_forest
+    strategy: null
+    split: random
+    label: binary
+    feature_selection: mi
+
+  - name: EXP-62
+    model: random_forest
+    strategy: null
+    split: random
+    label: multiclass
+    feature_selection: pearson
+  - name: EXP-63
+    model: random_forest
+    strategy: null
+    split: random
+    label: multiclass
+    feature_selection: mi
+
+  - name: EXP-64
+    model: random_forest
+    strategy: null
+    split: temporal
+    label: binary
+    feature_selection: pearson
+  - name: EXP-65
+    model: random_forest
+    strategy: null
+    split: temporal
+    label: binary
+    feature_selection: mi
+
+  # --- Feature selection: XGBoost (baselines EXP-51 / EXP-57 / EXP-54) ---
+  - name: EXP-66
+    model: xgboost
+    strategy: null
+    split: random
+    label: binary
+    feature_selection: pearson
+  - name: EXP-67
+    model: xgboost
+    strategy: null
+    split: random
+    label: binary
+    feature_selection: mi
+
+  - name: EXP-68
+    model: xgboost
+    strategy: null
+    split: random
+    label: multiclass
+    feature_selection: pearson
+  - name: EXP-69
+    model: xgboost
+    strategy: null
+    split: random
+    label: multiclass
+    feature_selection: mi
+
+  - name: EXP-70
+    model: xgboost
+    strategy: null
+    split: temporal
+    label: binary
+    feature_selection: pearson
+  - name: EXP-71
+    model: xgboost
+    strategy: null
+    split: temporal
+    label: binary
+    feature_selection: mi
+
 # --- Evaluation ---
 evaluation:
   primary_metrics:
