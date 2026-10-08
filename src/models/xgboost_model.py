@@ -29,6 +29,7 @@ def build_xgboost(config, model_name="xgboost", class_weight=None):
         colsample_bytree=xgb_cfg.get("colsample_bytree", 0.8),
         min_child_weight=xgb_cfg.get("min_child_weight", 1),
         gamma=xgb_cfg.get("gamma", 0.0),
+        reg_lambda=xgb_cfg.get("reg_lambda", 1.0),
         tree_method=xgb_cfg.get("tree_method", "hist"),
         device=_resolve_device(xgb_cfg.get("device", "auto")),
         random_state=xgb_cfg.get("random_state", 42),

@@ -220,6 +220,7 @@ models:
     colsample_bytree: 0.8
     min_child_weight: 1
     gamma: 0.0
+    reg_lambda: 1.0
     tree_method: hist
     device: auto
     random_state: 42
