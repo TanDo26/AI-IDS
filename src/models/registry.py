@@ -16,7 +16,12 @@ MODEL_REGISTRY = {
 }
 
 
-def get_model(model_name: str, config: dict, class_weight=None):
+def get_model(model_name: str, config: dict, class_weight=None, overrides=None):
+    if overrides:
+        # Per-experiment tuned params (experiments[].params) win over models.<name>
+        base = config["models"].get(model_name, {})
+        config = {**config, "models": {**config["models"], model_name: {**base, **overrides}}}
+
     if model_name.startswith("random_forest"):
         return build_random_forest(config, model_name, class_weight=class_weight)
     elif model_name.startswith("logistic_regression"):

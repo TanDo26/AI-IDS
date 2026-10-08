@@ -153,7 +153,10 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
 
     pbar.set_postfix_str(steps[1])
     class_weight = "balanced" if strategy == "class_weight" else None
-    model = get_model(model_name, config, class_weight=class_weight)
+    tuned_params = experiment.get("params")
+    if tuned_params:
+        print(f"  Using tuned params: {tuned_params}")
+    model = get_model(model_name, config, class_weight=class_weight, overrides=tuned_params)
 
     # These models have no class_weight parameter, so balancing goes through fit()
     fit_kwargs = {}
