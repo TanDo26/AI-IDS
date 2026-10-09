@@ -64,4 +64,3 @@ docker-compose.override.yml
 
 *.md
 !README.md
-log.txt
