@@ -16,7 +16,7 @@ import pandas as pd
 from .open_set import anomaly_scores, decide
 
 # Bumped when the bundle layout changes; older bundles must be rebuilt
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 
 MANIFEST = "manifest.json"
 SELFTEST = "selftest.parquet"
@@ -28,7 +28,6 @@ EXPECTED_ANOMALY_COL = "__expected_anomaly"
 EXPECTED_DECISION_COL = "__expected_decision"
 
 RECORDED_LIBRARIES = ("numpy", "pandas", "scikit-learn", "xgboost", "joblib")
-# Pickled models only load reliably with the same major.minor of these
 STRICT_LIBRARIES = ("scikit-learn", "xgboost")
 
 
@@ -110,7 +109,6 @@ class Bundle:
 
 
 def _check_hashes(path: Path, manifest: dict):
-    # Checked before unpickling anything: loading a pickle runs code
     for name, expected in manifest["files"].items():
         file = path / name
         if not file.exists():

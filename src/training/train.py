@@ -47,7 +47,7 @@ def model_artifact_path(config: dict, experiment: dict) -> Path:
             / f"{experiment['name']}_{model_name}{ext}")
 
 
-def _fit_preprocessing(X_train, y_train, config: dict, fs_profile: str):
+def fit_preprocessing(X_train, y_train, config: dict, fs_profile: str):
     selector = build_feature_selector(config, fs_profile)
     X_train = selector.fit_transform(X_train, y_train)
     print(f"  Feature selection: {selector.summary()}")
@@ -84,8 +84,7 @@ def prepare_data(split_name: str, label_type: str, config: dict,
         preprocessor = joblib.load(preprocessor_path)
         print(f"  Reusing saved preprocessing: {selector_path.name}, {preprocessor_path.name}")
     else:
-        selector, preprocessor = _fit_preprocessing(X_train, y_train, config, fs_profile)
-        # Analysis runs (HPO, XAI)
+        selector, preprocessor = fit_preprocessing(X_train, y_train, config, fs_profile)
         if save_artifacts:
             selector_path.parent.mkdir(parents=True, exist_ok=True)
             joblib.dump(selector, selector_path)
@@ -158,7 +157,6 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
         print(f"  Using tuned params: {tuned_params}")
     model = get_model(model_name, config, class_weight=class_weight, overrides=tuned_params)
 
-    # These models have no class_weight parameter, so balancing goes through fit()
     fit_kwargs = {}
     if class_weight and model_name in SAMPLE_WEIGHT_MODELS:
         fit_kwargs["sample_weight"] = compute_sample_weight("balanced", y_train)
@@ -172,7 +170,6 @@ def train_experiment(experiment: dict, config: dict, preprocessed_data: dict = N
     pbar.update(1)
 
     if model_name == "xgboost":
-        # Saved models must also load on CPU-only machines
         model.estimator_.set_params(device="cpu")
 
     pbar.set_postfix_str(steps[2])
