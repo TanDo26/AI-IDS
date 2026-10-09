@@ -646,6 +646,16 @@ experiments:
     label: binary
     feature_selection: mi
 
+# --- Open-set (unknown attack) detection, used by scripts/build_bundle.py ---
+open_set:
+  anomaly_detector: isolation_forest
+  anomaly_train_rows: 200000
+  n_estimators: 200
+  max_samples: 256
+  target_benign_fpr: 0.01
+  known_quantile: 0.05
+  random_state: 42
+
 # --- Evaluation ---
 evaluation:
   primary_metrics:
