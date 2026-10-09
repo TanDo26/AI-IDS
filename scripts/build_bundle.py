@@ -1,14 +1,5 @@
 """
 Package a trained multiclass experiment as a model bundle for the IDS server.
-
-    python scripts/build_bundle.py --exp EXP-59
-    python scripts/build_bundle.py --exp 59 --out model_store
-
-The bundle (see src/inference/bundle.py) holds the experiment's feature selector,
-preprocessor and classifier, plus an anomaly detector fitted on benign training flows
-and the two open-set thresholds calibrated on the validation split
-(src/inference/open_set.py). The manifest records test metrics, a CPU latency
-benchmark and file hashes; the bundle is reloaded and verified before the script ends.
 """
 import sys
 import json
@@ -54,7 +45,11 @@ def fit_anomaly_detector(config, selector, preprocessor, X_train, y_train, benig
     detector.set_params(n_jobs=1)
     info = {"type": os_cfg.get("anomaly_detector", "isolation_forest"), "train_rows": n,
             "n_estimators": detector.n_estimators, "max_samples": detector.max_samples}
-    return detector, info
+
+    # Typical benign values, so explanations can say how far a flow is from normal traffic
+    raw = sample[selector.selected_columns_]
+    benign_profile = {c: {"median": float(raw[c].median()), "std": float(raw[c].std())} for c in raw.columns}
+    return detector, info, benign_profile
 
 
 def calibrate(config, classifier, detector, X_val_t, y_val, benign_class):
@@ -127,8 +122,6 @@ def test_metrics(bundle, X_test, y_test, benign_class):
 
 
 def selftest_rows(bundle, X_val, y_val, val_result, per_class):
-    # A few validation rows per class and per decision reason, so the self-test
-    # exercises every class and every branch of the open-set decision
     by_class = y_val.groupby(y_val, group_keys=False).apply(
         lambda s: s.sample(min(per_class, len(s)), random_state=42)).index
     reasons = pd.Series(val_result["reason"].to_numpy(), index=y_val.index)
@@ -213,7 +206,8 @@ def main(exp, out_dir, per_class):
     X_train, X_val, X_test, y_train, y_val, y_test = load_split(split_name, label_type, config)
 
     print("  Fitting the anomaly detector on benign training flows...")
-    detector, detector_info = fit_anomaly_detector(config, selector, preprocessor, X_train, y_train, benign_class)
+    detector, detector_info, benign_profile = fit_anomaly_detector(
+        config, selector, preprocessor, X_train, y_train, benign_class)
     print("  Calibrating open-set thresholds on the validation split...")
     X_val_t = preprocessor.transform(selector.transform(X_val))
     thresholds, calibration = calibrate(config, classifier, detector, X_val_t, y_val, benign_class)
@@ -245,6 +239,7 @@ def main(exp, out_dir, per_class):
         "class_names": {str(int(c)): mapping["int_to_label"][str(int(c))] for c in staged.classes},
         "benign_class": int(benign_class),
         "open_set": open_set,
+        "benign_profile": benign_profile,
         "metrics": {"test": metrics},
         "latency_cpu": latency,
         "selftest_rows": len(selftest_df),

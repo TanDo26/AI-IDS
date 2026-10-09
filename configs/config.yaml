@@ -39,7 +39,18 @@ datasets:
     temporal_split:
       train_days: [Monday, Tuesday, Wednesday]
       test_days: [Thursday, Friday]
-      val_fraction_from_train: 0.1765 
+      val_fraction_from_train: 0.1765
+
+    # Attack families for leave-one-family-out open-set evaluation
+    attack_families:
+      dos: [DoS GoldenEye, DoS Hulk, DoS Slowhttptest, DoS Slowloris]
+      ddos: [DDoS]
+      bruteforce: [FTP-Patator, SSH-Patator]
+      web: [Web Attack - Brute Force, Web Attack - SQL Injection, Web Attack - XSS]
+      scan: [Portscan, Infiltration - Portscan]
+      botnet: [Botnet]
+      infiltration: [Infiltration]
+      heartbleed: [Heartbleed]
 
     drop_columns: []
 
