@@ -49,6 +49,7 @@ desktop.ini
 # ============================================================
 /models/
 /results/
+/model_store/
 
 # ============================================================
 # Docker
@@ -62,3 +63,4 @@ docker-compose.override.yml
 
 *.md
 !README.md
+log.txt
