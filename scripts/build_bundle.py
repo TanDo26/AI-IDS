@@ -20,7 +20,7 @@ from src.training.train import load_split, model_artifact_path, TORCH_MODELS
 from src.preprocessing.artifacts import get_fs_profile, preprocessing_artifact_paths
 from src.evaluation.metrics import calculate_metrics
 from src.models.anomaly import build_anomaly_detector
-from src.inference.open_set import anomaly_scores, decide, BENIGN, KNOWN_ATTACK, UNKNOWN
+from src.inference.open_set import anomaly_scores, decide, known_thresholds, BENIGN, KNOWN_ATTACK, UNKNOWN
 from src.inference.bundle import (
     Bundle, save_bundle, load_bundle,
     EXPECTED_CLASS_COL, EXPECTED_PROBA_PREFIX, EXPECTED_ANOMALY_COL, EXPECTED_DECISION_COL,
@@ -66,13 +66,33 @@ def calibrate(config, classifier, detector, X_val_t, y_val, benign_class):
     if not correct_attack.any() or not benign_ok.any():
         raise SystemExit("Validation split has no correctly classified attacks or benign flows to calibrate on")
 
+    q, min_rows = os_cfg["known_quantile"], os_cfg.get("min_class_rows", 30)
+    tau_global = float(np.quantile(confidence[correct_attack], q))
+
+    # One threshold per attack class: a global one is set by the big, very confident classes
+    # (DoS Hulk, DDoS) and pushed most correct predictions of rare classes to "unknown"
+    per_class, method = {}, {}
+    for c in np.asarray(classifier.classes_):
+        if c == benign_class:
+            continue
+        conf_c = confidence[correct_attack & (y == c)]
+        if len(conf_c) >= min_rows:
+            per_class[str(int(c))], method[str(int(c))] = float(np.quantile(conf_c, q)), "quantile"
+        elif len(conf_c):  # too few rows for a quantile: keep every validation hit known
+            per_class[str(int(c))], method[str(int(c))] = float(conf_c.min()), "min"
+        else:
+            per_class[str(int(c))], method[str(int(c))] = tau_global, "global"
+
     return {
-        # Correct known attacks below this confidence become "unknown" (known_quantile of them)
-        "known": float(np.quantile(confidence[correct_attack], os_cfg["known_quantile"])),
+        # Correct known attacks below their class threshold become "unknown" (known_quantile of them)
+        "known": tau_global,
+        "known_per_class": per_class,
         # Classifier-benign flows above this anomaly score become "unknown" (target_benign_fpr of them)
         "anomaly": float(np.quantile(anomaly[benign_ok], 1 - os_cfg["target_benign_fpr"])),
     }, {
-        "known_quantile": os_cfg["known_quantile"],
+        "known_quantile": q,
+        "min_class_rows": min_rows,
+        "known_per_class_method": method,
         "target_benign_fpr": os_cfg["target_benign_fpr"],
         "val_correct_attack_rows": int(correct_attack.sum()),
         "val_benign_rows": int(benign_ok.sum()),
@@ -116,7 +136,7 @@ def test_metrics(bundle, X_test, y_test, benign_class):
 
     thresholds = bundle.manifest["open_set"]["thresholds"]
     result = decide(proba, bundle.classes, anomaly_scores(bundle.anomaly_detector, X), benign_class,
-                    thresholds["known"], thresholds["anomaly"])
+                    known_thresholds(thresholds, bundle.classes), thresholds["anomaly"])
     return {"multiclass": multiclass, "attack_vs_benign": binary,
             "open_set": open_set_breakdown(result, y_test, benign_class)}
 
@@ -256,8 +276,9 @@ def main(exp, out_dir, per_class):
     print(f"\n  Bundle: {path}")
     print(f"  Features: {len(manifest['required_features'])} | Classes: {len(manifest['classes'])} "
           f"| Self-test: {len(selftest_df)} rows passed after reload")
-    print(f"  Thresholds: known >= {thresholds['known']:.6g} confidence | "
-          f"anomaly > {thresholds['anomaly']:.6g}")
+    per_class = thresholds["known_per_class"].values()
+    print(f"  Thresholds: known >= per-class confidence ({min(per_class):.6g} .. {max(per_class):.6g}; "
+          f"global {thresholds['known']:.6g}) | anomaly > {thresholds['anomaly']:.6g}")
     print(f"  Validation: benign -> unknown {val['benign_as_unknown']:.2%} "
           f"(target {calibration['target_benign_fpr']:.2%}) | attacks -> unknown {val['attack_as_unknown']:.2%}")
     print(f"  Test  multiclass: macro-F1={mc['macro_f1']:.4f} macro-recall={mc['macro_recall']:.4f} "
