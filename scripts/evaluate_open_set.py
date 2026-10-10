@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 import yaml
 from sklearn.metrics import f1_score
-from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_sample_weight
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,7 +21,7 @@ from src.training.train import load_split, fit_preprocessing, TORCH_MODELS, SAMP
 from src.imbalance.smote import apply_smote
 from src.imbalance.undersampling import apply_undersampling
 from src.models.registry import get_model
-from src.inference.open_set import anomaly_scores, decide, BENIGN, KNOWN_ATTACK, UNKNOWN
+from src.inference.open_set import anomaly_scores, decide, known_thresholds, BENIGN, KNOWN_ATTACK, UNKNOWN
 from scripts.build_bundle import fit_anomaly_detector, calibrate, resolve_experiment
 
 RULES = ("argmax", "confidence", "anomaly", "combined")
@@ -33,17 +32,17 @@ def apply_rule(rule, proba, classes, anomaly, benign, thresholds):
         decision = np.where(anomaly > thresholds["anomaly"], UNKNOWN, BENIGN)
         return pd.DataFrame({"decision": decision,
                              "predicted_class": np.where(decision == BENIGN, benign, -1)})
-    tau_known = 0.0 if rule == "argmax" else thresholds["known"]
+    tau_known = 0.0 if rule == "argmax" else known_thresholds(thresholds, classes)
     tau_anomaly = thresholds["anomaly"] if rule == "combined" else np.inf
     return decide(proba, classes, anomaly, benign, tau_known, tau_anomaly)
 
 
-def score(rule, result, y, benign, known_classes):
+def score(rule, result, y, benign, known_classes, unseen_labels):
     decision = result["decision"].to_numpy()
     predicted = result["predicted_class"].to_numpy()
     is_benign = y == benign
-    unseen = ~np.isin(y, known_classes)
-    known_attack = ~is_benign & ~unseen
+    unseen = np.isin(y, unseen_labels)
+    known_attack = ~is_benign & np.isin(y, known_classes)
 
     def share(mask, of):
         return round(float(mask[of].mean()), 6) if of.any() else None
@@ -52,7 +51,7 @@ def score(rule, result, y, benign, known_classes):
     if rule != "anomaly":
         # Known classes only; "unknown" counts as a wrong label for them
         # (averaged over known classes present in the test set: Thu-Fri contains only Benign of them)
-        rows = ~unseen
+        rows = np.isin(y, known_classes)
         y_pred = np.where(decision == KNOWN_ATTACK, predicted, np.where(decision == BENIGN, benign, -1))
         present = np.intersect1d(known_classes, y[rows])
         known_f1 = round(float(f1_score(y[rows], y_pred[rows], labels=present,
@@ -76,10 +75,10 @@ def score(rule, result, y, benign, known_classes):
     }
 
 
-def by_label(rule, result, y, known_classes, names):
+def by_label(rule, result, y, unseen_labels, names):
     decision = result["decision"].to_numpy()
     rows = []
-    for label in sorted(set(y[~np.isin(y, known_classes)])):
+    for label in sorted(set(y[np.isin(y, unseen_labels)])):
         mask = y == label
         rows.append({"rule": rule, "label": names[str(int(label))], "flows": int(mask.sum()),
                      "as_unknown": round(float((decision[mask] == UNKNOWN).mean()), 6),
@@ -88,11 +87,18 @@ def by_label(rule, result, y, known_classes, names):
     return rows
 
 
-def run_fold(config, spec, data, train_mask, benign, names, subsample):
+def subsample_rows(X, y, frac, min_per_class=100):
+    """Stratified fraction that never drops a class: each keeps max(frac, min_per_class) rows (or all)."""
+    idx = y.groupby(y, group_keys=False).apply(
+        lambda s: s.sample(min(len(s), max(int(round(len(s) * frac)), min_per_class)), random_state=42)).index
+    return X.loc[idx], y.loc[idx]
+
+
+def run_fold(config, spec, data, train_mask, unseen_labels, benign, names, subsample):
     X_train, X_val, X_test, y_train, y_val, y_test = data
     X_tr, y_tr = X_train[train_mask], y_train[train_mask]
     if subsample:
-        X_tr, _, y_tr, _ = train_test_split(X_tr, y_tr, train_size=subsample, stratify=y_tr, random_state=42)
+        X_tr, y_tr = subsample_rows(X_tr, y_tr, subsample)
 
     # Preprocessing is refit on the known classes only, so nothing about unseen attacks leaks in
     selector, preprocessor = fit_preprocessing(X_tr, y_tr, config, spec["fs"])
@@ -125,12 +131,14 @@ def run_fold(config, spec, data, train_mask, benign, names, subsample):
     proba = classifier.predict_proba(X_test_t)
     anomaly = anomaly_scores(detector, X_test_t)
     y = y_test.to_numpy()
+    if unseen_labels is None:  # temporal: every test label the classifier never saw
+        unseen_labels = np.setdiff1d(np.unique(y), known_classes)
 
     rows, label_rows = [], []
     for rule in RULES:
         result = apply_rule(rule, proba, known_classes, anomaly, benign, thresholds)
-        rows.append({"rule": rule, **score(rule, result, y, benign, known_classes)})
-        label_rows += by_label(rule, result, y, known_classes, names)
+        rows.append({"rule": rule, **score(rule, result, y, benign, known_classes, unseen_labels)})
+        label_rows += by_label(rule, result, y, unseen_labels, names)
     info = {"train_rows": len(y_tr), "known_classes": len(known_classes), "train_s": round(train_s, 1),
             "tau_known": thresholds["known"], "tau_anomaly": thresholds["anomaly"]}
     return rows, label_rows, info
@@ -163,15 +171,19 @@ def main(args):
     data = load_split(split, "multiclass", config)
     y_train = data[3].to_numpy()
 
+    # fold -> (training rows to keep, labels that count as unseen; None = whatever wasn't trained on)
     if args.protocol == "temporal":
-        folds = {"temporal": np.ones(len(y_train), dtype=bool)}
+        folds = {"temporal": (np.ones(len(y_train), dtype=bool), None)}
     else:
         families = ds_cfg["attack_families"]
         selected = args.families.split(",") if args.families else list(families)
         unknown = [f for f in selected if f not in families]
         if unknown:
             raise SystemExit(f"Unknown families {unknown}. Available: {', '.join(families)}")
-        folds = {f: ~np.isin(y_train, [label_to_int[l] for l in families[f]]) for f in selected}
+        folds = {}
+        for f in selected:
+            held_out = np.array([label_to_int[l] for l in families[f]])
+            folds[f] = (~np.isin(y_train, held_out), held_out)
 
     print("=" * 78)
     print(f"  OPEN-SET EVALUATION | protocol={args.protocol} | {spec['model']} | strategy={spec['strategy']} "
@@ -179,9 +191,10 @@ def main(args):
     print("=" * 78)
 
     all_rows, all_label_rows = [], []
-    for fold, train_mask in folds.items():
+    for fold, (train_mask, unseen_labels) in folds.items():
         print(f"\n  Fold '{fold}': training on {int(train_mask.sum()):,} rows...")
-        rows, label_rows, info = run_fold(config, spec, data, train_mask, benign, names, args.subsample)
+        rows, label_rows, info = run_fold(config, spec, data, train_mask, unseen_labels, benign, names,
+                                          args.subsample)
         print(f"    {info['known_classes']} known classes, {info['train_rows']:,} rows, trained in {info['train_s']}s "
               f"| tau_known={info['tau_known']:.6g} tau_anomaly={info['tau_anomaly']:.4f}")
         print(f"    {'rule':<11}{'unseen detected':>16}{'(label avg)':>12}{'-> unknown':>12}{'-> known type':>15}"

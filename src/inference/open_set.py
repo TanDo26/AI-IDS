@@ -20,15 +20,23 @@ def anomaly_scores(detector, X) -> np.ndarray:
     return -detector.score_samples(X)
 
 
+def known_thresholds(thresholds: dict, classes) -> np.ndarray:
+    """Confidence threshold per class, aligned with classes (global threshold where none was calibrated)."""
+    per_class = thresholds.get("known_per_class", {})
+    return np.array([per_class.get(str(int(c)), thresholds["known"]) for c in classes], dtype=float)
+
+
 def decide(proba, classes, anomaly, benign_class, tau_known, tau_anomaly) -> pd.DataFrame:
+    """tau_known: one threshold for all classes, or an array aligned with classes."""
     classes = np.asarray(classes)
     top = proba.argmax(axis=1)
     predicted = classes[top]
     confidence = proba[np.arange(len(proba)), top]
     benign_col = int(np.flatnonzero(classes == benign_class)[0])
+    tau = np.asarray(tau_known, dtype=float)
 
     says_attack = predicted != benign_class
-    known = says_attack & (confidence >= tau_known)
+    known = says_attack & (confidence >= (tau[top] if tau.ndim else tau))
     low_confidence = says_attack & ~known
     anomalous = ~says_attack & (anomaly > tau_anomaly)
 

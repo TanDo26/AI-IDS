@@ -665,6 +665,7 @@ open_set:
   max_samples: 256
   target_benign_fpr: 0.01
   known_quantile: 0.05
+  min_class_rows: 30
   random_state: 42
 
 # --- Evaluation ---

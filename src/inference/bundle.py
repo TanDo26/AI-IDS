@@ -13,10 +13,10 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from .open_set import anomaly_scores, decide
+from .open_set import anomaly_scores, decide, known_thresholds
 
 # Bumped when the bundle layout changes; older bundles must be rebuilt
-FORMAT_VERSION = 3
+FORMAT_VERSION = 4
 
 MANIFEST = "manifest.json"
 SELFTEST = "selftest.parquet"
@@ -83,7 +83,7 @@ class Bundle:
         thresholds = self.manifest["open_set"]["thresholds"]
         return decide(self.classifier.predict_proba(X), self.classes,
                       anomaly_scores(self.anomaly_detector, X), self.manifest["benign_class"],
-                      thresholds["known"], thresholds["anomaly"])
+                      known_thresholds(thresholds, self.classes), thresholds["anomaly"])
 
     def selftest(self):
         df = pd.read_parquet(self.path / SELFTEST)
