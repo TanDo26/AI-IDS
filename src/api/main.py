@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI, Request
 
 from src.api import health
+from src.api.auth import router as auth
 from src.api.inference import router as inference
 from src.api.runtime.model_manager import create_model_manager
 from src.api.settings import get_settings
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
 
     api = APIRouter(prefix=API_PREFIX)
     api.include_router(health.router)
+    api.include_router(auth.router)
     api.include_router(inference.router)
     app.include_router(api)
     return app

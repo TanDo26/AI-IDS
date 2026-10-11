@@ -67,7 +67,10 @@ def calibrate(config, classifier, detector, X_val_t, y_val, benign_class):
         raise SystemExit("Validation split has no correctly classified attacks or benign flows to calibrate on")
 
     q, min_rows = os_cfg["known_quantile"], os_cfg.get("min_class_rows", 30)
-    tau_global = float(np.quantile(confidence[correct_attack], q))
+    # Thresholds sit just off the calibration values, so a validation row lying exactly on one
+    # can't flip with float noise (RandomForest probabilities vary in the last bits per call)
+    margin = 1e-9
+    tau_global = float(np.quantile(confidence[correct_attack], q)) - margin
 
     # One threshold per attack class: a global one is set by the big, very confident classes
     # (DoS Hulk, DDoS) and pushed most correct predictions of rare classes to "unknown"
@@ -77,9 +80,9 @@ def calibrate(config, classifier, detector, X_val_t, y_val, benign_class):
             continue
         conf_c = confidence[correct_attack & (y == c)]
         if len(conf_c) >= min_rows:
-            per_class[str(int(c))], method[str(int(c))] = float(np.quantile(conf_c, q)), "quantile"
+            per_class[str(int(c))], method[str(int(c))] = float(np.quantile(conf_c, q)) - margin, "quantile"
         elif len(conf_c):  # too few rows for a quantile: keep every validation hit known
-            per_class[str(int(c))], method[str(int(c))] = float(conf_c.min()), "min"
+            per_class[str(int(c))], method[str(int(c))] = float(conf_c.min()) - margin, "min"
         else:
             per_class[str(int(c))], method[str(int(c))] = tau_global, "global"
 
@@ -88,7 +91,7 @@ def calibrate(config, classifier, detector, X_val_t, y_val, benign_class):
         "known": tau_global,
         "known_per_class": per_class,
         # Classifier-benign flows above this anomaly score become "unknown" (target_benign_fpr of them)
-        "anomaly": float(np.quantile(anomaly[benign_ok], 1 - os_cfg["target_benign_fpr"])),
+        "anomaly": float(np.quantile(anomaly[benign_ok], 1 - os_cfg["target_benign_fpr"])) + margin,
     }, {
         "known_quantile": q,
         "min_class_rows": min_rows,

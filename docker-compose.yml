@@ -8,7 +8,7 @@ x-app: &app
   profiles: [app]
   environment:
     IDS_ENV: ${IDS_ENV:-development}
-    IDS_SECRET_KEY: ${IDS_SECRET_KEY:-dev-only-change-me}
+    IDS_SECRET_KEY: ${IDS_SECRET_KEY:-dev-only-insecure-secret-key-do-not-use-in-production}
     IDS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ids}:${POSTGRES_PASSWORD:-ids}@postgres:5432/${POSTGRES_DB:-ids}
     IDS_REDIS_URL: redis://redis:6379/0
     IDS_MODEL_STORE: /app/model_store
@@ -17,6 +17,7 @@ x-app: &app
     IDS_RETENTION_DAYS: ${IDS_RETENTION_DAYS:-30}
     IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-false}
     IDS_MODEL_POLL_SECONDS: ${IDS_MODEL_POLL_SECONDS:-30}
+    IDS_COOKIE_SECURE: ${IDS_COOKIE_SECURE:-true}
   volumes:
     - ./model_store:/app/model_store:ro    # bundles are built on the training machine
     - appdata:/data                        # uploads/ and results/
