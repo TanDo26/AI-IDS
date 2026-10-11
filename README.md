@@ -165,8 +165,8 @@ AI-IDS/
 │   │   ├── metrics.py               # Binary + multiclass metrics
 │   │   ├── evaluate.py              # Evaluation orchestration
 │   │   └── plots.py                 # Confusion matrix + PR curve plots
-│   └── api/
-│       └── app.py                   # FastAPI inference server
+│   ├── inference/                   # Model bundles, open-set decision, explanations, model store
+│   └── api/                         # FastAPI web API (main.py), DB models, Celery worker
 ├── scripts/
 │   ├── prepare_data.py              # CLI: load → clean → split
 │   ├── train_all.py                 # CLI: train experiments (with --exp filter)
@@ -320,38 +320,31 @@ Outputs saved to `results/xai/`:
 
 ### Inference API
 
-Real-time prediction API using [FastAPI](https://fastapi.tiangolo.com/).
+Real-time prediction API using [FastAPI](https://fastapi.tiangolo.com/). It serves the **active model bundle**, so there is no per-experiment configuration any more:
 
 ```bash
-# Run locally
-cd src/api && python app.py
+python scripts/build_bundle.py --exp EXP-59                 # package a trained multiclass experiment
+python scripts/manage_models.py activate <bundle_id>        # make it the served model
 
-# Or with environment variable config
-IDS_EXP_NAME=EXP-02 IDS_MODEL_TYPE=random_forest python -m uvicorn src.api.app:app --port 8000
+# Full stack: Postgres, Redis, migrations, API, Celery worker, Caddy proxy on http://localhost:8080
+cp .env.example .env                                        # then set IDS_SECRET_KEY and POSTGRES_PASSWORD
+docker compose --profile app up --build
 
-# Docker
-docker compose up api
+# Or the API alone on the host (needs Postgres/Redis reachable via IDS_DATABASE_URL / IDS_REDIS_URL)
+alembic upgrade head
+uvicorn src.api.main:app --port 8000
 ```
 
-**Endpoints:**
+**Endpoints** (prefix `/api/v1`; Swagger UI at `/api/docs`):
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/` | Service info |
-| `GET` | `/health` | Health check (model status) |
-| `POST` | `/predict` | Predict single flow |
-| `POST` | `/batch_predict` | Predict multiple flows |
+| `GET` | `/healthz` | Liveness |
+| `GET` | `/readyz` | Readiness: database, Redis, active model |
+| `POST` | `/predict` | One flow → `benign` / `known_attack` / `unknown`, attack type, scores |
+| `POST` | `/batch_predict` | Up to 10,000 flows |
 
-Swagger UI available at `http://localhost:8000/docs`.
-
-**Environment variables:**
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `IDS_EXP_NAME` | `EXP-02` | Experiment name to load |
-| `IDS_MODEL_TYPE` | `random_forest` | Model type |
-| `IDS_SPLIT` | `random` | Split type |
-| `IDS_LABEL_TYPE` | `binary` | Label type |
+Settings are `IDS_*` environment variables (see `.env.example`).
 
 ## Configuration
 
