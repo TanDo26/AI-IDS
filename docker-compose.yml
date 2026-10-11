@@ -1,7 +1,30 @@
 version: "3.8"
 
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/api.Dockerfile
+  image: ai-ids-api
+  profiles: [app]
+  environment:
+    IDS_ENV: ${IDS_ENV:-development}
+    IDS_SECRET_KEY: ${IDS_SECRET_KEY:-dev-only-change-me}
+    IDS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ids}:${POSTGRES_PASSWORD:-ids}@postgres:5432/${POSTGRES_DB:-ids}
+    IDS_REDIS_URL: redis://redis:6379/0
+    IDS_MODEL_STORE: /app/model_store
+    IDS_DATA_DIR: /data
+    IDS_MAX_UPLOAD_MB: ${IDS_MAX_UPLOAD_MB:-100}
+    IDS_RETENTION_DAYS: ${IDS_RETENTION_DAYS:-30}
+    IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-false}
+    IDS_MODEL_POLL_SECONDS: ${IDS_MODEL_POLL_SECONDS:-30}
+  volumes:
+    - ./model_store:/app/model_store:ro    # bundles are built on the training machine
+    - appdata:/data                        # uploads/ and results/
+
 services:
+  # ── pipeline ─────────────────────────────────────────────
   ids:
+    profiles: [pipeline]
     build: .
     container_name: ai-ids
     volumes:
@@ -23,44 +46,116 @@ services:
   prepare:
     extends:
       service: ids
+    profiles: [pipeline]
     command: ["scripts/prepare_data.py"]
 
   train:
     extends:
       service: ids
+    profiles: [pipeline]
     command: ["scripts/train_all.py"]
 
   evaluate:
     extends:
       service: ids
+    profiles: [pipeline]
     command: ["scripts/evaluate_all.py"]
 
   run-all:
     extends:
       service: ids
+    profiles: [pipeline]
     command: ["scripts/run_all.py"]
 
   hpo:
     extends:
       service: ids
+    profiles: [pipeline]
     command: ["scripts/optimize_hpo.py"]
 
   xai:
     extends:
       service: ids
+    profiles: [pipeline]
     command: ["scripts/xai_analysis.py"]
 
-  api:
-    extends:
-      service: ids
-    ports:
-      - "8000:8000"
+  # ── app ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    profiles: [app]
     environment:
-      - PYTHONPATH=/app
-      - IDS_EXP_NAME=EXP-02
-      - IDS_MODEL_TYPE=random_forest
-      - IDS_SPLIT=random
-      - IDS_LABEL_TYPE=binary
-      - IDS_FEATURE_SELECTION=none
-    entrypoint: ["python", "-m", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
-    command: []
+      POSTGRES_USER: ${POSTGRES_USER:-ids}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ids}
+      POSTGRES_DB: ${POSTGRES_DB:-ids}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    profiles: [app]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "src.api.worker.celery_app:celery_app", "worker", "--concurrency", "2", "--loglevel", "INFO"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  proxy:
+    image: caddy:2-alpine
+    profiles: [app]
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  appdata:
+  caddydata:

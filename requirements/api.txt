@@ -1,0 +1,23 @@
+# Serving + web backend (docker/api.Dockerfile); also pulled into requirements.txt.
+# scikit-learn / xgboost must match the major.minor that bundles were built with:
+# src/inference/bundle.py refuses to load a bundle otherwise.
+numpy>=2.0
+pandas>=2.0
+scikit-learn==1.9.*
+xgboost==3.4.*
+shap>=0.45
+joblib>=1.3
+pyarrow>=14.0
+pyyaml>=6.0
+
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.7
+pydantic-settings>=2.3
+sqlalchemy>=2.0
+alembic>=1.13
+psycopg[binary]>=3.1
+celery>=5.4
+redis>=5.0
+psutil>=5.9
+httpx>=0.27

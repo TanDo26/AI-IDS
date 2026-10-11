@@ -4,3 +4,11 @@ __pycache__
 .venv
 *.egg-info
 .gitignore
+
+# Large or secret; the pipeline mounts these at runtime, the API image never needs them
+dataset/
+models/
+results/
+model_store/
+data/
+.env
