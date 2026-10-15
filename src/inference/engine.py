@@ -37,6 +37,11 @@ class InferenceEngine:
         self.required = list(bundle.manifest["required_features"])
         self.class_names = bundle.manifest["class_names"]
 
+    def missing_features(self, columns) -> list[str]:
+        """Required features absent from these column names, after the same renaming as prepare()."""
+        df, _ = normalize_columns(pd.DataFrame(columns=list(columns)), self.required)
+        return [f for f in self.required if f not in df.columns]
+
     def prepare(self, df: pd.DataFrame) -> PreparedFlows:
         df, renamed = normalize_columns(df, self.required)
         missing = [f for f in self.required if f not in df.columns]

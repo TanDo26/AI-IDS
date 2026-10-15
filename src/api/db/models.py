@@ -121,6 +121,8 @@ class Upload(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     processing_ms: Mapped[int | None] = mapped_column(BigInteger)
     raw_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # set by retention
+    # Deleted by its owner or an admin: files and results are gone, the row stays for usage totals
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="uploads")
     summary: Mapped["PredictionSummary | None"] = relationship(
