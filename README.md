@@ -426,6 +426,9 @@ training machine.
 | `GET` | `/auth/me` | Current user |
 | `POST` | `/predict` | One flow → `benign` / `known_attack` / `unknown`, attack type, scores (login required) |
 | `POST` | `/batch_predict` | Up to 10,000 flows (login required) |
+| `POST` | `/uploads` | Upload a CICFlowMeter CSV as multipart field `file` (≤ 100 MB). The type is read from the content, and missing features are listed at once. PCAP / PCAPNG only with `IDS_ENABLE_PCAP=true`. |
+| `GET` | `/uploads`, `/uploads/{id}` | Your uploads (newest first, `page` / `size` / `status`), or one upload's status and progress |
+| `DELETE` | `/uploads/{id}` | Delete the file and its results (owner or admin); it still counts in usage totals |
 | `GET` | `/admin/models` | Admin: versions with metrics, the active one, what each process has loaded |
 | `POST` | `/admin/models/rescan` | Admin: register / re-check the bundles in `model_store/` |
 | `POST` | `/admin/models/{id}/activate`, `/admin/models/rollback` | Admin: switch the served model |

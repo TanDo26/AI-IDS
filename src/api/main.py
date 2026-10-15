@@ -15,6 +15,7 @@ from src.api.auth import router as auth
 from src.api.inference import router as inference
 from src.api.runtime.model_manager import ModelRuntime, create_model_manager
 from src.api.settings import get_settings
+from src.api.uploads import router as uploads
 
 API_PREFIX = "/api/v1"
 _REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     api.include_router(health.router)
     api.include_router(auth.router)
     api.include_router(inference.router)
+    api.include_router(uploads.router)
     api.include_router(admin.router)
     app.include_router(api)
     return app
