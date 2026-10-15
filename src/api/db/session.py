@@ -5,7 +5,7 @@ Database engine and sessions (SQLAlchemy 2, sync; FastAPI runs sync routes in a 
 from collections.abc import Iterator
 from functools import lru_cache
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -18,7 +18,11 @@ def get_engine() -> Engine:
     kwargs = {"pool_pre_ping": True}
     if url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}  # sessions cross FastAPI's threads
-    return create_engine(url, **kwargs)
+    engine = create_engine(url, **kwargs)
+    if engine.dialect.name == "sqlite":
+        # SQLite ignores foreign keys, and so ON DELETE CASCADE / SET NULL, unless enabled per connection
+        event.listen(engine, "connect", lambda dbapi_conn, _: dbapi_conn.execute("PRAGMA foreign_keys=ON"))
+    return engine
 
 
 @lru_cache

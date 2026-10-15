@@ -27,6 +27,8 @@ EXPECTED_PROBA_PREFIX = "__expected_proba_"
 EXPECTED_ANOMALY_COL = "__expected_anomaly"
 EXPECTED_DECISION_COL = "__expected_decision"
 
+BOUNDARY_TOLERANCE = 1e-9 
+
 RECORDED_LIBRARIES = ("numpy", "pandas", "scikit-learn", "xgboost", "joblib")
 STRICT_LIBRARIES = ("scikit-learn", "xgboost")
 
@@ -96,11 +98,23 @@ class Bundle:
 
         proba = self.predict_proba(df)
         result = self.predict(df)
+
+        # RandomForest sums its trees across threads, so probabilities vary in the last bits between
+        # calls; a row sitting exactly on a threshold can then flip. Only such rows may differ.
+        decisions_match = result["decision"].to_numpy() == expected_decision
+        if not decisions_match.all():
+            thresholds = self.manifest["open_set"]["thresholds"]
+            tau_known = known_thresholds(thresholds, self.classes)[proba.argmax(axis=1)]
+            on_boundary = (np.isclose(result["confidence"].to_numpy(), tau_known, rtol=0, atol=BOUNDARY_TOLERANCE)
+                           | np.isclose(result["anomaly_score"].to_numpy(), thresholds["anomaly"],
+                                        rtol=0, atol=BOUNDARY_TOLERANCE))
+            decisions_match |= on_boundary
+
         checks = {
             "predicted class": np.array_equal(result["predicted_class"].to_numpy(), expected_class),
             "probabilities": np.allclose(proba, expected_proba, atol=1e-6),
             "anomaly scores": np.allclose(result["anomaly_score"].to_numpy(), expected_anomaly, atol=1e-6),
-            "decisions": np.array_equal(result["decision"].to_numpy(), expected_decision),
+            "decisions": bool(decisions_match.all()),
         }
         failed = [name for name, ok in checks.items() if not ok]
         if failed:

@@ -8,7 +8,7 @@ x-app: &app
   profiles: [app]
   environment:
     IDS_ENV: ${IDS_ENV:-development}
-    IDS_SECRET_KEY: ${IDS_SECRET_KEY:-dev-only-change-me}
+    IDS_SECRET_KEY: ${IDS_SECRET_KEY:-dev-only-insecure-secret-key-do-not-use-in-production}
     IDS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ids}:${POSTGRES_PASSWORD:-ids}@postgres:5432/${POSTGRES_DB:-ids}
     IDS_REDIS_URL: redis://redis:6379/0
     IDS_MODEL_STORE: /app/model_store
@@ -17,6 +17,7 @@ x-app: &app
     IDS_RETENTION_DAYS: ${IDS_RETENTION_DAYS:-30}
     IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-false}
     IDS_MODEL_POLL_SECONDS: ${IDS_MODEL_POLL_SECONDS:-30}
+    IDS_COOKIE_SECURE: ${IDS_COOKIE_SECURE:-true}
   volumes:
     - ./model_store:/app/model_store:ro    # bundles are built on the training machine
     - appdata:/data                        # uploads/ and results/
@@ -153,6 +154,34 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+
+  # ── test ─────────────────────────────────────────────────
+  # Throwaway Postgres + Redis for pytest; data lives in tmpfs, ports only on localhost:
+  #   docker compose --profile test up -d
+  #   IDS_TEST_DATABASE_URL=postgresql+psycopg://ids:ids@localhost:5433/ids_test \
+  #   IDS_TEST_REDIS_URL=redis://localhost:6380/0 pytest
+  postgres-test:
+    image: postgres:16-alpine
+    profiles: [test]
+    environment:
+      POSTGRES_USER: ids
+      POSTGRES_PASSWORD: ids
+      POSTGRES_DB: ids_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ids -d ids_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  redis-test:
+    image: redis:7-alpine
+    profiles: [test]
+    ports:
+      - "127.0.0.1:6380:6379"
 
 volumes:
   pgdata:
