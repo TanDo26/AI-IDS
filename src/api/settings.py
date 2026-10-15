@@ -26,7 +26,9 @@ class Settings(BaseSettings):
 
     model_store: Path = PROJECT_ROOT / "model_store"
     data_dir: Path = PROJECT_ROOT / "data"           # uploads/ and results/ live here
-    model_poll_seconds: float = 30.0
+    model_poll_seconds: float = 30.0                 # fallback check of the active model version
+    # Redis pub/sub for immediate model switches + per-process loaded-version reports (off in tests)
+    model_events_enabled: bool = True
 
     max_upload_mb: int = 100                         # Cloudflare Free caps request bodies at 100 MB
     retention_days: int = 30

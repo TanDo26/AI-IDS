@@ -1,5 +1,8 @@
 """
 Model manager: the active bundle for one process, swapped when the store's active bundle changes.
+
+A store is anything with `root` (the bundles' directory) and `active_id()`: ModelStore
+(registry.json) for offline use, or the web server's database registry.
 """
 
 import logging
@@ -75,9 +78,13 @@ class ModelManager:
             self._poller = None
 
     def status(self) -> dict:
+        try:
+            active = self.store.active_id()
+        except Exception as e:  # e.g. the database behind a DB-backed store is down
+            active = f"unavailable ({type(e).__name__})"
         return {
             "loaded": self._bundle.bundle_id if self._bundle else None,
             "loaded_at": self._loaded_at,
-            "active_in_store": self.store.active_id(),
+            "active_in_store": active,
             "last_error": self._last_error,
         }

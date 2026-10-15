@@ -1,0 +1,94 @@
+"""
+Request / response models for /admin.
+"""
+
+from datetime import datetime
+
+from pydantic import BaseModel
+
+from src.api.db.models import ModelVersion
+
+
+class ModelMetrics(BaseModel):
+    """From the bundle's manifest: its test split at build time. None where the bundle has no value."""
+    macro_f1: float | None = None                 # known classes
+    attack_recall: float | None = None            # attack vs benign, classifier alone
+    benign_fpr: float | None = None
+    benign_as_unknown: float | None = None        # open-set false alarms on benign flows
+    attack_as_unknown: float | None = None
+    attack_missed: float | None = None
+    latency_p50_ms: float | None = None           # one flow, CPU, end to end
+    latency_p95_ms: float | None = None
+    batch_flows_per_second: float | None = None
+
+    @classmethod
+    def from_manifest(cls, manifest: dict) -> "ModelMetrics":
+        test = manifest.get("metrics", {}).get("test", {})
+        mc, bv, os_ = test.get("multiclass", {}), test.get("attack_vs_benign", {}), test.get("open_set", {})
+        latency = manifest.get("latency_cpu", {})
+        return cls(macro_f1=mc.get("macro_f1"), attack_recall=bv.get("recall_attack"), benign_fpr=bv.get("fpr"),
+                   benign_as_unknown=os_.get("benign_as_unknown"), attack_as_unknown=os_.get("attack_as_unknown"),
+                   attack_missed=os_.get("attack_missed"), latency_p50_ms=latency.get("single_flow_ms_p50"),
+                   latency_p95_ms=latency.get("single_flow_ms_p95"),
+                   batch_flows_per_second=latency.get("batch_flows_per_second"))
+
+
+class ModelVersionOut(BaseModel):
+    id: int
+    bundle_id: str
+    status: str                                   # available | active | invalid | retired
+    invalid_reason: str | None                    # also set on an active version that now fails its checks
+    registered_at: datetime
+    activated_at: datetime | None
+    activated_by: int | None
+    source: dict | None                           # experiment, model, strategy, split, feature selection
+    classes: list[str]
+    n_features: int | None
+    metrics: ModelMetrics
+
+    @classmethod
+    def from_row(cls, row: ModelVersion) -> "ModelVersionOut":
+        manifest = row.manifest or {}
+        names = manifest.get("class_names", {})
+        return cls(id=row.id, bundle_id=row.bundle_id, status=row.status, invalid_reason=row.invalid_reason,
+                   registered_at=row.registered_at, activated_at=row.activated_at, activated_by=row.activated_by,
+                   source=manifest.get("source"),
+                   classes=[names.get(str(c), str(c)) for c in manifest.get("classes", [])],
+                   n_features=len(manifest["required_features"]) if "required_features" in manifest else None,
+                   metrics=ModelMetrics.from_manifest(manifest))
+
+
+class LoadedModel(BaseModel):
+    loaded: str | None                            # bundle id in memory
+    loaded_at: str | None
+    active_in_store: str | None                   # what the database says is active
+    last_error: str | None                        # the last bundle that failed to load
+
+
+class ProcessModel(LoadedModel):
+    process: str                                  # host:pid
+    kind: str                                     # api | worker
+    reported_at: str
+    lagging: bool                                 # has something other than the active version loaded
+
+
+class ModelsOverview(BaseModel):
+    active: str | None
+    versions: list[ModelVersionOut]
+    this_process: LoadedModel                     # the API process that answered this request
+    processes: list[ProcessModel] | None          # every process reporting via Redis; None without Redis
+
+
+class RescanOut(BaseModel):
+    added: list[str]
+    verified: list[str]
+    invalid: list[str]
+    retired: list[str]
+    versions: list[ModelVersionOut]
+
+
+class ActivationOut(BaseModel):
+    version: ModelVersionOut
+    previous: str | None
+    changed: bool                                 # False if the version was already active
+    notified: bool                                # processes told via Redis; otherwise they switch at their next poll

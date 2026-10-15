@@ -10,9 +10,10 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI, Request
 
 from src.api import health
+from src.api.admin import router as admin
 from src.api.auth import router as auth
 from src.api.inference import router as inference
-from src.api.runtime.model_manager import create_model_manager
+from src.api.runtime.model_manager import ModelRuntime, create_model_manager
 from src.api.settings import get_settings
 
 API_PREFIX = "/api/v1"
@@ -25,9 +26,10 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.started_at = time.time()
     app.state.models = create_model_manager(settings)
-    app.state.models.start_polling(settings.model_poll_seconds)  # picks up model switches
+    app.state.model_runtime = ModelRuntime(app.state.models, settings, kind="api", listen=True)
+    app.state.model_runtime.start()  # picks up model switches
     yield
-    app.state.models.stop_polling()
+    app.state.model_runtime.stop()
 
 
 def create_app() -> FastAPI:
@@ -55,6 +57,7 @@ def create_app() -> FastAPI:
     api.include_router(health.router)
     api.include_router(auth.router)
     api.include_router(inference.router)
+    api.include_router(admin.router)
     app.include_router(api)
     return app
 

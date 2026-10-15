@@ -1,5 +1,10 @@
 """
 Manage the server's model bundles in model_store/.
+
+Without --db, the active bundle is recorded in model_store/registry.json (offline use).
+The web server reads it from its database instead: use --db there, e.g. inside the container:
+    docker compose exec api python scripts/manage_models.py --db rescan
+    docker compose exec api python scripts/manage_models.py --db activate <bundle_id>
 """
 import sys
 import argparse
@@ -52,12 +57,81 @@ def cmd_verify(store, args):
           f"self-test on {bundle.manifest['selftest_rows']} rows)")
 
 
+# ── --db: the web server's model_versions table ──
+
+def db_list(registry, db, _args):
+    from sqlalchemy import select
+    from src.api.db.models import ModelVersion
+
+    rows = db.scalars(select(ModelVersion).order_by(ModelVersion.registered_at)).all()
+    if not rows:
+        print("  No registered versions. Register the bundles: python scripts/manage_models.py --db rescan")
+    for row in rows:
+        mark = "*" if row.status == "active" else " "
+        detail = _summary(row.manifest) if row.status in ("active", "available") else row.invalid_reason
+        print(f" {mark} {row.bundle_id:<42} {row.status:<9} {detail}")
+        if row.status == "active" and row.invalid_reason:
+            print(f"    warning: {row.invalid_reason}")
+
+
+def db_rescan(registry, db, _args):
+    report = registry.rescan(db, actor_id=None)
+    for name, ids in report.__dict__.items():
+        print(f"  {name:<9} {', '.join(ids) or '-'}")
+
+
+def _switched(activation):
+    from src.api.runtime import model_events
+    from src.api.settings import get_settings
+
+    if not activation.changed:
+        print(f"  {activation.version.bundle_id} is already active")
+        return
+    settings = get_settings()
+    notified = settings.model_events_enabled and model_events.publish(
+        settings.redis_url, {"type": "activated", "bundle_id": activation.version.bundle_id,
+                             "version_id": activation.version.id})
+    print(f"  Active: {activation.version.bundle_id} (was {activation.previous}); "
+          + ("servers notified" if notified else f"servers switch within {settings.model_poll_seconds:.0f} s"))
+
+
+def db_activate(registry, db, args):
+    from sqlalchemy import select
+    from src.api.db.models import ModelVersion
+
+    version_id = db.scalar(select(ModelVersion.id).where(ModelVersion.bundle_id == args.bundle_id))
+    if version_id is None:
+        sys.exit(f"  {args.bundle_id} is not registered; run: python scripts/manage_models.py --db rescan")
+    _switched(registry.activate(db, version_id, actor_id=None))
+
+
+def db_rollback(registry, db, _args):
+    _switched(registry.rollback(db, actor_id=None))
+
+
+def run_db(args):
+    from src.api.db.session import get_sessionmaker
+    from src.api.runtime.model_registry import ModelRegistry, RegistryError
+
+    commands = {"list": db_list, "rescan": db_rescan, "activate": db_activate, "rollback": db_rollback,
+                "verify": lambda registry, _db, a: cmd_verify(ModelStore(registry.root), a)}
+    registry = ModelRegistry(args.store, get_sessionmaker())
+    with get_sessionmaker()() as db:
+        try:
+            commands[args.command](registry, db, args)
+        except RegistryError as e:
+            sys.exit(f"  Error: {e.message}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage model bundles for the IDS server")
     parser.add_argument("--store", default=str(PROJECT_ROOT / "model_store"),
                         help="Model store directory (default: model_store/)")
+    parser.add_argument("--db", action="store_true",
+                        help="Use the web server's database (IDS_DATABASE_URL) instead of registry.json")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("list", help="Verify every bundle and show its metrics")
+    sub.add_parser("list", help="Show every bundle with its metrics (without --db: verifies them too)")
+    sub.add_parser("rescan", help="--db only: register new bundles, re-check known ones")
     p = sub.add_parser("activate", help="Verify a bundle and make it the active one")
     p.add_argument("bundle_id")
     sub.add_parser("rollback", help="Re-activate the previously active bundle")
@@ -67,6 +141,11 @@ if __name__ == "__main__":
 
     commands = {"list": cmd_list, "activate": cmd_activate, "rollback": cmd_rollback, "verify": cmd_verify}
     try:
-        commands[args.command](ModelStore(args.store), args)
+        if args.db:
+            run_db(args)
+        elif args.command == "rescan":
+            sys.exit("  rescan needs --db (without it, list already verifies every bundle)")
+        else:
+            commands[args.command](ModelStore(args.store), args)
     except BundleError as e:
         sys.exit(f"  Error: {e}")
