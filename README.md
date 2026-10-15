@@ -223,6 +223,7 @@ AI-IDS/
 │   ├── manage_models.py             # CLI: list / activate / roll back model bundles
 │   ├── evaluate_open_set.py         # CLI: unseen-attack evaluation (temporal, leave-one-family-out)
 │   └── create_admin.py              # CLI: first admin account for the web API
+├── tests/                           # pytest suite for the web API + inference (tiny synthetic bundle)
 ├── models/                          # Saved trained models (.pkl / .pt)
 ├── results/
 │   ├── metrics/                     # CSV summary tables
@@ -422,6 +423,23 @@ the `access_token` from `/auth/login` as `Authorization: Bearer <token>`.
 
 Settings are `IDS_*` environment variables (see `.env.example`).
 
+### Tests
+
+The web API and the inference library are covered by a pytest suite in `tests/`. It doesn't touch your data: `.env` is ignored, and the database, model store and data directory are temporary. Bundles come from a tiny synthetic model (`tests/tiny_bundle.py`), so no trained models or dataset are needed.
+
+```bash
+pip install -r requirements/test.txt
+pytest                                   # SQLite, no services needed
+
+# Against real Postgres + Redis (Compose profile "test"; data in tmpfs, ports on localhost only)
+docker compose --profile test up -d
+IDS_TEST_DATABASE_URL=postgresql+psycopg://ids:ids@localhost:5433/ids_test \
+IDS_TEST_REDIS_URL=redis://localhost:6380/0 pytest
+docker compose --profile test down
+```
+
+The tests empty every table, so `IDS_TEST_DATABASE_URL` must name a database containing `test`.
+
 ## Configuration
 
 All experiment parameters are controlled via [`configs/config.yaml`](configs/config.yaml):
@@ -446,3 +464,4 @@ All experiment parameters are controlled via [`configs/config.yaml`](configs/con
 
 - `requirements.txt`: training pipeline (PyTorch with CUDA, Optuna, SHAP, …); it includes `requirements/api.txt`
 - `requirements/api.txt`: model serving + web backend. It pins scikit-learn and XGBoost to the versions model bundles are built with.
+- `requirements/test.txt`: `api.txt` plus pytest

@@ -1,0 +1,3 @@
+# Test suite: pytest (see tests/conftest.py for the database and Redis options).
+-r api.txt
+pytest>=8.0

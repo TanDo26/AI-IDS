@@ -155,6 +155,34 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ── test ─────────────────────────────────────────────────
+  # Throwaway Postgres + Redis for pytest; data lives in tmpfs, ports only on localhost:
+  #   docker compose --profile test up -d
+  #   IDS_TEST_DATABASE_URL=postgresql+psycopg://ids:ids@localhost:5433/ids_test \
+  #   IDS_TEST_REDIS_URL=redis://localhost:6380/0 pytest
+  postgres-test:
+    image: postgres:16-alpine
+    profiles: [test]
+    environment:
+      POSTGRES_USER: ids
+      POSTGRES_PASSWORD: ids
+      POSTGRES_DB: ids_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ids -d ids_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  redis-test:
+    image: redis:7-alpine
+    profiles: [test]
+    ports:
+      - "127.0.0.1:6380:6379"
+
 volumes:
   pgdata:
   redisdata:
