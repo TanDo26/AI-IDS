@@ -394,16 +394,26 @@ Real-time prediction API using [FastAPI](https://fastapi.tiangolo.com/). It serv
 
 ```bash
 python scripts/build_bundle.py --exp EXP-59                 # package a trained multiclass experiment
-python scripts/manage_models.py activate <bundle_id>        # make it the served model
 
 # Full stack: Postgres, Redis, migrations, API, Celery worker, Caddy proxy on http://localhost:8080
 cp .env.example .env                                        # then set IDS_SECRET_KEY and POSTGRES_PASSWORD
 docker compose --profile app up --build
 
+# Register the bundles in model_store/ and choose the served one (or use the /admin/models endpoints)
+docker compose exec api python scripts/manage_models.py --db rescan
+docker compose exec api python scripts/manage_models.py --db activate <bundle_id>
+
 # Or the API alone on the host (needs Postgres/Redis reachable via IDS_DATABASE_URL / IDS_REDIS_URL)
 alembic upgrade head
 uvicorn src.api.main:app --port 8000
 ```
+
+**Model switching.** The server's active bundle is recorded in its database, in the `model_versions` table.
+`manage_models.py` without `--db` only edits `model_store/registry.json`, which is for offline use on the
+training machine.
+- **Rescan** registers new bundles and re-checks known ones; broken ones are marked `invalid`.
+- **Activate** verifies the bundle first, then switches it in one transaction and writes the audit log.
+- **Propagation:** every API process switches within seconds through Redis (`ids:model-events`), or at its next database check (`IDS_MODEL_POLL_SECONDS`, 30 s) if Redis is down. Requests already running finish on the old bundle. Celery workers switch at the start of each job.
 
 **Endpoints** (prefix `/api/v1`; Swagger UI at `/api/docs`):
 
@@ -416,6 +426,9 @@ uvicorn src.api.main:app --port 8000
 | `GET` | `/auth/me` | Current user |
 | `POST` | `/predict` | One flow → `benign` / `known_attack` / `unknown`, attack type, scores (login required) |
 | `POST` | `/batch_predict` | Up to 10,000 flows (login required) |
+| `GET` | `/admin/models` | Admin: versions with metrics, the active one, what each process has loaded |
+| `POST` | `/admin/models/rescan` | Admin: register / re-check the bundles in `model_store/` |
+| `POST` | `/admin/models/{id}/activate`, `/admin/models/rollback` | Admin: switch the served model |
 
 Create the first admin with `python scripts/create_admin.py --email you@example.com --username admin`
 (in Docker: `docker compose exec api python scripts/create_admin.py ...`). Scripts call `/predict` with
@@ -433,8 +446,8 @@ pytest                                   # SQLite, no services needed
 
 # Against real Postgres + Redis (Compose profile "test"; data in tmpfs, ports on localhost only)
 docker compose --profile test up -d
-IDS_TEST_DATABASE_URL=postgresql+psycopg://ids:ids@localhost:5433/ids_test \
-IDS_TEST_REDIS_URL=redis://localhost:6380/0 pytest
+IDS_TEST_DATABASE_URL=postgresql+psycopg://ids:ids@127.0.0.1:5433/ids_test \
+IDS_TEST_REDIS_URL=redis://127.0.0.1:6380/0 pytest
 docker compose --profile test down
 ```
 

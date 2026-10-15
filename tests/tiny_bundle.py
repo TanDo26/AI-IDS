@@ -101,8 +101,11 @@ def build_tiny_bundle(out_dir, bundle_id: str, seed: int = 0) -> Path:
         "open_set": {"thresholds": thresholds, "calibration": {}, "anomaly_detector": {"type": "isolation_forest"}},
         "benign_profile": {c: {"median": float(X_sel.loc[benign, c].median()), "std": float(X_sel.loc[benign, c].std())}
                            for c in X_sel.columns},
-        "metrics": {},
-        "latency_cpu": {},
+        # Fixed placeholder values (not measured), in build_bundle.py's layout, for the admin page
+        "metrics": {"test": {"multiclass": {"macro_f1": 0.99},
+                             "attack_vs_benign": {"recall_attack": 0.98, "fpr": 0.01},
+                             "open_set": {"benign_as_unknown": 0.01, "attack_as_unknown": 0.3, "attack_missed": 0.02}}},
+        "latency_cpu": {"single_flow_ms_p50": 1.5, "single_flow_ms_p95": 3.0, "batch_flows_per_second": 100000},
     }
 
     staged = Bundle(None, manifest, selector, preprocessor, classifier, detector)

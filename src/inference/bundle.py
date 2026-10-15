@@ -158,21 +158,35 @@ def save_bundle(path: Path, manifest: dict, selector, preprocessor, classifier, 
     return manifest
 
 
-def load_bundle(path, verify: bool = True) -> Bundle:
-    """Load a bundle; with verify, check hashes and library versions first, then run the self-test."""
+def read_manifest(path) -> dict:
+    """The bundle's manifest, if it is in the format this code reads."""
     path = Path(path)
     manifest_file = path / MANIFEST
     if not manifest_file.exists():
         raise BundleError(f"{path}: no {MANIFEST}")
-    manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    try:
+        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise BundleError(f"{path.name}: unreadable {MANIFEST} ({e})")
     if manifest.get("format") != FORMAT_VERSION:
         raise BundleError(f"{path.name}: bundle format {manifest.get('format', 1)}, this code reads "
                           f"format {FORMAT_VERSION}; rebuild it with scripts/build_bundle.py")
+    return manifest
 
-    if verify:
-        _check_hashes(path, manifest)
-        _check_versions(path, manifest)
 
+def verify_files(path) -> dict:
+    """Format, SHA-256 of every file and library versions, without unpickling anything. Returns the manifest."""
+    path = Path(path)
+    manifest = read_manifest(path)
+    _check_hashes(path, manifest)
+    _check_versions(path, manifest)
+    return manifest
+
+
+def load_bundle(path, verify: bool = True) -> Bundle:
+    """Load a bundle; with verify, check hashes and library versions first, then run the self-test."""
+    path = Path(path)
+    manifest = verify_files(path) if verify else read_manifest(path)
     bundle = Bundle(path, manifest, *(joblib.load(path / name) for name in ARTIFACTS))
     if verify:
         bundle.selftest()

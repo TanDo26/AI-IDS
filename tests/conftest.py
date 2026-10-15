@@ -5,9 +5,11 @@ The environment is fixed here, before anything reads the settings:
 - .env and other IDS_* variables are ignored; rate limits are off; bcrypt runs at cost 4.
 - Database: SQLite in a temp directory, or IDS_TEST_DATABASE_URL (the Compose "test" Postgres).
   It is migrated once with Alembic, and the `db` fixture empties every table before each test.
-- Redis: IDS_TEST_REDIS_URL if set; tests that need Redis skip without it.
+- Redis: IDS_TEST_REDIS_URL if set; tests that need Redis skip without it. Model events (pub/sub
+  and loaded-version reports) are off unless a test turns them on.
 - Model store and data directory: temp directories, emptied before each test that uses them.
-  `install_bundle` / `active_bundle` put tiny real bundles (tests/tiny_bundle.py) in the store.
+  Tiny real bundles (tests/tiny_bundle.py) go in with `install_bundle` (files + registry.json, for
+  the offline store) or `register_bundle` / `active_bundle` (files + model_versions, as the server).
 """
 
 import os
@@ -26,19 +28,22 @@ os.environ.update({
     "IDS_ENV": "test",
     "IDS_SECRET_KEY": "test-only-secret-key-that-is-long-enough-for-hs256",
     "IDS_DATABASE_URL": os.environ.get("IDS_TEST_DATABASE_URL") or f"sqlite:///{(TMP / 'test.db').as_posix()}",
-    "IDS_REDIS_URL": os.environ.get("IDS_TEST_REDIS_URL") or "redis://localhost:6380/0",
+    "IDS_REDIS_URL": os.environ.get("IDS_TEST_REDIS_URL") or "redis://127.0.0.1:6380/0",
     "IDS_MODEL_STORE": str(TMP / "model_store"),
     "IDS_DATA_DIR": str(TMP / "data"),
     "IDS_MODEL_POLL_SECONDS": "3600",           # tests switch models explicitly
     "IDS_RATE_LIMITS_ENABLED": "false",
+    "IDS_MODEL_EVENTS_ENABLED": "false",
 })
 
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
 
 from src.api.auth import security  # noqa: E402
-from src.api.db.models import Base, User  # noqa: E402
+from src.api.db.models import Base, ModelVersion, User  # noqa: E402
 from src.api.db.session import get_engine, get_sessionmaker  # noqa: E402
+from src.api.runtime.model_registry import ModelRegistry  # noqa: E402
 from src.api.settings import Settings, get_settings  # noqa: E402
 from src.inference.bundle import load_bundle  # noqa: E402
 from src.inference.store import ModelStore  # noqa: E402
@@ -176,7 +181,26 @@ def client(app):
 
 
 @pytest.fixture
-def active_bundle(client, install_bundle):
-    """TINY_A activated and loaded by the running app, as after an admin switch."""
-    install_bundle(TINY_A)
+def registry(settings) -> ModelRegistry:
+    """The server's model registry (model_versions), as the app builds it."""
+    return ModelRegistry(settings.model_store, get_sessionmaker())
+
+
+@pytest.fixture
+def register_bundle(db, install_bundle, registry):
+    """Copy a tiny bundle into the store and register it (a rescan); activate=True also activates it."""
+    def register(bundle_id=TINY_A, activate=True) -> ModelVersion:
+        install_bundle(bundle_id, activate=False)
+        registry.rescan(db, actor_id=None)
+        version = db.scalar(select(ModelVersion).where(ModelVersion.bundle_id == bundle_id))
+        if activate:
+            registry.activate(db, version.id, actor_id=None)
+        return version
+    return register
+
+
+@pytest.fixture
+def active_bundle(client, register_bundle):
+    """TINY_A activated in the database and loaded by the running app, as after an admin switch."""
+    register_bundle(TINY_A)
     return client.app.state.models.ensure_current()
