@@ -57,7 +57,10 @@ class InferenceEngine:
 
     def predict(self, df: pd.DataFrame) -> pd.DataFrame:
         """Metadata columns + decision, reason, predicted_class, class_name, scores, imputed_cells."""
-        prepared = self.prepare(df)
+        return self.predict_prepared(self.prepare(df))
+
+    def predict_prepared(self, prepared: PreparedFlows) -> pd.DataFrame:
+        """predict() for flows already through prepare(), when the caller also needs the features."""
         n = len(prepared.features)
         if n == 0:  # scikit-learn refuses zero rows
             result = pd.DataFrame(columns=["decision", "reason", "predicted_class",

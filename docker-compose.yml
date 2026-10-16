@@ -142,6 +142,16 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Schedules the daily retention job (exactly one beat per deployment)
+  beat:
+    <<: *app
+    command: ["celery", "-A", "src.api.worker.celery_app:celery_app", "beat", "--loglevel", "INFO",
+              "--schedule", "/tmp/celerybeat-schedule"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   proxy:
     image: caddy:2-alpine
     profiles: [app]
