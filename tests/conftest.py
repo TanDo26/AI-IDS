@@ -10,6 +10,8 @@ The environment is fixed here, before anything reads the settings:
 - Model store and data directory: temp directories, emptied before each test that uses them.
   Tiny real bundles (tests/tiny_bundle.py) go in with `install_bundle` (files + registry.json, for
   the offline store) or `register_bundle` / `active_bundle` (files + model_versions, as the server).
+- Celery doesn't run: uploads queued for processing are collected in `queued_jobs`, and
+  `run_queued()` processes them in-process through the real task (retry and on_failure included).
 """
 
 import os
@@ -47,6 +49,7 @@ from src.api.runtime.model_registry import ModelRegistry  # noqa: E402
 from src.api.settings import Settings, get_settings  # noqa: E402
 from src.inference.bundle import load_bundle  # noqa: E402
 from src.inference.store import ModelStore  # noqa: E402
+from src.api.worker import tasks  # noqa: E402
 from tests.helpers import PASSWORD  # noqa: E402
 from tests.tiny_bundle import build_tiny_bundle  # noqa: E402
 
@@ -163,6 +166,28 @@ def install_bundle(model_store, tiny_bundles):
             model_store.activate(bundle_id, actor="pytest")
         return path
     return install
+
+
+# ── Celery ──────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True)
+def queued_jobs(monkeypatch) -> list[str]:
+    """Upload ids the API queued for processing (instead of sending them to a broker)."""
+    jobs = []
+    monkeypatch.setattr(tasks, "enqueue_upload", lambda upload_id: jobs.append(str(upload_id)))
+    return jobs
+
+
+@pytest.fixture
+def run_queued(queued_jobs, monkeypatch):
+    """run_queued() processes the queued uploads as a worker would and returns each task's result."""
+    monkeypatch.setattr(tasks, "_models", None)        # a fresh worker process
+
+    def run() -> list:
+        results = [tasks.process_upload.apply(args=[job]).result for job in queued_jobs]
+        queued_jobs.clear()
+        return results
+    return run
 
 
 # ── app ─────────────────────────────────────────────────────

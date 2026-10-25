@@ -2,6 +2,7 @@
 /uploads: send a CSV (or, when enabled, a PCAP), list yours, look one up, delete one.
 """
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -11,13 +12,16 @@ from starlette.datastructures import UploadFile
 
 from src.api.auth.deps import get_current_user
 from src.api.db.models import User
-from src.api.db.session import get_db
+from src.api.db.session import get_db, get_sessionmaker
 from src.api.ratelimit import UPLOADS_PER_USER, rate_limit
 from src.api.runtime.model_manager import get_model_manager
 from src.api.settings import get_settings
-from src.api.uploads import service
+from src.api.uploads import processing, service
 from src.api.uploads.schemas import UploadOut, UploadPage, UploadStatus
 from src.api.uploads.validation import UploadRejected
+from src.api.worker import tasks
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
@@ -54,10 +58,19 @@ async def create_upload(request: Request, user: User = Depends(get_current_user)
         if not isinstance(file, UploadFile):
             raise HTTPException(status_code=422, detail="Send the file as multipart/form-data in the field 'file'")
         try:
-            return await run_in_threadpool(service.save_upload, db, get_settings(), user, file.file,
-                                           file.filename, engine)
+            upload = await run_in_threadpool(service.save_upload, db, get_settings(), user, file.file,
+                                             file.filename, engine)
         except UploadRejected as e:
             raise _http(e)
+
+    try:
+        await run_in_threadpool(tasks.enqueue_upload, upload.id)
+    except Exception:
+        log.exception("Could not queue upload %s", upload.id)
+        await run_in_threadpool(processing.mark_failed, get_sessionmaker(), get_settings(), upload.id,
+                                "Could not queue the upload for processing; please upload it again")
+        raise HTTPException(status_code=503, detail="The processing queue is unavailable; try again shortly")
+    return upload
 
 
 @router.get("", response_model=UploadPage)

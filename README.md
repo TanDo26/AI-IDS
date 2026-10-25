@@ -408,6 +408,13 @@ alembic upgrade head
 uvicorn src.api.main:app --port 8000
 ```
 
+**Upload processing.** Each upload is queued for the Celery `worker`:
+- it predicts the flows in batches of 50,000;
+- it writes per-flow results to `data/results/<upload_id>/flows.parquet` and a summary: decision counts, known-attack breakdown, and agreement with an uploaded `Label` column (attack vs benign);
+- `GET /uploads/{id}` shows the status (`queued` → `predicting` → `completed` / `failed`), the progress and any error.
+
+The `beat` service deletes raw uploads older than `IDS_RETENTION_DAYS` (30) every night at 03:30 UTC; results and usage records stay.
+
 **Model switching.** The server's active bundle is recorded in its database, in the `model_versions` table.
 `manage_models.py` without `--db` only edits `model_store/registry.json`, which is for offline use on the
 training machine.
@@ -426,7 +433,7 @@ training machine.
 | `GET` | `/auth/me` | Current user |
 | `POST` | `/predict` | One flow → `benign` / `known_attack` / `unknown`, attack type, scores (login required) |
 | `POST` | `/batch_predict` | Up to 10,000 flows (login required) |
-| `POST` | `/uploads` | Upload a CICFlowMeter CSV as multipart field `file` (≤ 100 MB). The type is read from the content, and missing features are listed at once. PCAP / PCAPNG only with `IDS_ENABLE_PCAP=true`. |
+| `POST` | `/uploads` | Upload a CICFlowMeter CSV as multipart field `file` (≤ 100 MB) and queue it for processing. The type is read from the content, and missing features are listed at once. PCAP / PCAPNG only with `IDS_ENABLE_PCAP=true`. |
 | `GET` | `/uploads`, `/uploads/{id}` | Your uploads (newest first, `page` / `size` / `status`), or one upload's status and progress |
 | `DELETE` | `/uploads/{id}` | Delete the file and its results (owner or admin); it still counts in usage totals |
 | `GET` | `/admin/models` | Admin: versions with metrics, the active one, what each process has loaded |

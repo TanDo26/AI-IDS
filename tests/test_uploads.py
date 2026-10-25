@@ -5,7 +5,6 @@
 import hashlib
 import uuid
 
-import pandas as pd
 import pytest
 from sqlalchemy import select
 
@@ -14,30 +13,16 @@ from src.api.db.models import AuditLog, PredictionSummary, Upload
 from src.api.ratelimit import UPLOADS_PER_USER, RateLimiter
 from src.api.uploads.service import display_name
 from src.inference.schema import JAVA_TO_TRAINING
-from tests.helpers import API, bearer, csrf, login
-from tests.tiny_bundle import CANONICAL_FLOWS
+from tests.helpers import API, bearer, csrf, flows_csv, login, upload_file as send
 
 UPLOADS = f"{API}/uploads"
 PCAP_HEADERS = {"pcap": ["d4c3b2a1", "a1b2c3d4", "4d3cb2a1", "a1b23c4d"], "pcapng": ["0a0d0d0a"]}
-
-
-def flows_csv(n_copies=1, rename=None, bom=False) -> bytes:
-    df = pd.DataFrame([f for f, *_ in CANONICAL_FLOWS.values()] * n_copies)
-    df.insert(0, "Src IP", "10.0.0.1")
-    text = df.rename(columns=rename or {}).to_csv(index=False)
-    return ("\ufeff" if bom else "").encode("utf-8") + text.encode("utf-8")
 
 
 def csv_of_size(min_bytes: int) -> bytes:
     one = flows_csv()
     rows = one.split(b"\n", 1)[1]
     return one + rows * (min_bytes // len(rows) + 1)
-
-
-def send(client, user, content, filename="flows.csv", **kwargs):
-    headers = bearer(user) if user is not None else {}
-    return client.post(UPLOADS, files={"file": (filename, content, "application/octet-stream")},
-                       headers=headers, **kwargs)
 
 
 def stored_files(settings) -> list:
