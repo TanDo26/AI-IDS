@@ -224,6 +224,7 @@ AI-IDS/
 │   ├── evaluate_open_set.py         # CLI: unseen-attack evaluation (temporal, leave-one-family-out)
 │   └── create_admin.py              # CLI: first admin account for the web API
 ├── tests/                           # pytest suite for the web API + inference (tiny synthetic bundle)
+├── web/                             # Next.js frontend (served by Caddy next to the API)
 ├── models/                          # Saved trained models (.pkl / .pt)
 ├── results/
 │   ├── metrics/                     # CSV summary tables
@@ -458,6 +459,29 @@ Create the first admin with `python scripts/create_admin.py --email you@example.
 the `access_token` from `/auth/login` as `Authorization: Bearer <token>`.
 
 Settings are `IDS_*` environment variables (see `.env.example`).
+
+### Web frontend (`web/`)
+
+[Next.js](https://nextjs.org/) 16 (App Router, TypeScript, Tailwind CSS). Caddy serves it on the same origin as the API: pages at `http://localhost:8080/`, the API under `/api/`.
+
+```bash
+docker compose --profile app up -d --build     # the stack includes the web service; open http://localhost:8080
+
+# Development with hot reload (Node.js 24 LTS)
+cd web
+npm install
+npm run dev                                    # http://localhost:3000; /api/* is forwarded to http://localhost:8080
+npm test                                       # unit tests: API client, session rules
+npm run typecheck
+
+# After changing an API endpoint or schema: regenerate the frontend's types
+python scripts/export_openapi.py && cd web && npm run gen:api
+```
+
+Without Node.js installed, the same commands run in Docker:
+`docker run --rm -v "$PWD/web:/app" -w /app node:24-alpine sh -c "npm ci && npm test"`.
+
+The session cookies are `Secure`, so browsers keep them over HTTPS and on `http://localhost` only. For plain-http access from another machine, set `IDS_COOKIE_SECURE=false`; the sign-in page says so if the cookies were refused.
 
 ### Tests
 

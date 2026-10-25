@@ -158,6 +158,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Next.js frontend (web/); Caddy sends every non-/api path here
+  web:
+    build:
+      context: ./web
+    image: ai-ids-web
+    profiles: [app]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
   proxy:
     image: caddy:2-alpine
     profiles: [app]
@@ -168,6 +181,8 @@ services:
       - caddydata:/data
     depends_on:
       api:
+        condition: service_healthy
+      web:
         condition: service_healthy
     restart: unless-stopped
 
