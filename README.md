@@ -436,6 +436,10 @@ training machine.
 | `POST` | `/uploads` | Upload a CICFlowMeter CSV as multipart field `file` (≤ 100 MB) and queue it for processing. The type is read from the content, and missing features are listed at once. PCAP / PCAPNG only with `IDS_ENABLE_PCAP=true`. |
 | `GET` | `/uploads`, `/uploads/{id}` | Your uploads (newest first, `page` / `size` / `status`), or one upload's status and progress |
 | `DELETE` | `/uploads/{id}` | Delete the file and its results (owner or admin); it still counts in usage totals |
+| `GET` | `/uploads/{id}/summary` | Decision counts, known attacks per type, unknowns per reason, label agreement, the model that produced them |
+| `GET` | `/uploads/{id}/flows` | Paginated flows (`page`, `size` ≤ 500), filtered by `decision` / `class_name`, sorted by `sort` (e.g. `-anomaly_score`) |
+| `GET` | `/uploads/{id}/flows/{row}/explain` | SHAP explanation of one flow, computed with the bundle that produced it |
+| `GET` | `/uploads/{id}/export.csv` | Download the results as CSV (`decision`, `class_name`, `features=true` to include the model inputs) |
 | `GET` | `/admin/models` | Admin: versions with metrics, the active one, what each process has loaded |
 | `POST` | `/admin/models/rescan` | Admin: register / re-check the bundles in `model_store/` |
 | `POST` | `/admin/models/{id}/activate`, `/admin/models/rollback` | Admin: switch the served model |
