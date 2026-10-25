@@ -443,6 +443,9 @@ training machine.
 | `GET` | `/admin/models` | Admin: versions with metrics, the active one, what each process has loaded |
 | `POST` | `/admin/models/rescan` | Admin: register / re-check the bundles in `model_store/` |
 | `POST` | `/admin/models/{id}/activate`, `/admin/models/rollback` | Admin: switch the served model |
+| `GET` / `PATCH` | `/admin/users`, `/admin/users/{id}` | Admin: search users; deactivate/reactivate, promote/demote (audited; not yourself, never the last admin) |
+| `GET` | `/admin/usage`, `/admin/usage/{user_id}/daily` | Admin: per-user uploads, bytes, flows, processing time, storage (`from` / `to`); one user's daily series |
+| `GET` | `/admin/uploads`, `/admin/audit` | Admin: every user's uploads (`user_id`, `status`, `deleted`); the audit log (`action`, `actor_id`, `target_type`, `target_id`) |
 
 Create the first admin with `python scripts/create_admin.py --email you@example.com --username admin`
 (in Docker: `docker compose exec api python scripts/create_admin.py ...`). Scripts call `/predict` with
