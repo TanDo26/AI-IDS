@@ -62,7 +62,10 @@ def list_models(request: Request, db: Session = Depends(get_db)):
 @router.post("/models/rescan", response_model=RescanOut)
 def rescan(registry: ModelRegistry = Depends(get_registry), admin: User = Depends(require_admin),
            db: Session = Depends(get_db)):
-    report = registry.rescan(db, admin.id)
+    try:
+        report = registry.rescan(db, admin.id)
+    except RegistryError as e:
+        raise HTTPException(status_code=e.status, detail=e.message)
     return RescanOut(**report.__dict__, versions=_versions(db))
 
 

@@ -18,6 +18,7 @@ With several uvicorn workers, set PROMETHEUS_MULTIPROC_DIR to an empty directory
 before start, so the HTTP metrics of all workers are summed.
 """
 
+import logging
 import os
 
 import redis
@@ -30,6 +31,8 @@ from src.api.admin.status import CELERY_QUEUE
 from src.api.db.models import ModelVersion, Upload, User
 from src.api.db.session import get_sessionmaker
 from src.api.settings import get_settings
+
+log = logging.getLogger(__name__)
 
 REQUESTS = Counter("ids_http_requests", "HTTP requests", ["method", "route", "status"])
 LATENCY = Histogram("ids_http_request_duration_seconds", "Time to the response headers", ["method", "route"],
@@ -49,9 +52,19 @@ def route_label(scope) -> str:
     return "/".join(parts[: len(parts) - template.count("/")]) + template
 
 
+_observe_failed = False
+
+
 def observe(method: str, route: str, status: int, seconds: float) -> None:
-    REQUESTS.labels(method, route, str(status)).inc()
-    LATENCY.labels(method, route).observe(seconds)
+    """Never raises: a metrics problem (e.g. an unwritable PROMETHEUS_MULTIPROC_DIR) must not fail requests."""
+    global _observe_failed
+    try:
+        REQUESTS.labels(method, route, str(status)).inc()
+        LATENCY.labels(method, route).observe(seconds)
+    except Exception:
+        if not _observe_failed:   # once per process, not once per request
+            log.exception("Recording HTTP metrics failed; requests are unaffected, /metrics may be incomplete")
+            _observe_failed = True
 
 
 class StateCollector:

@@ -4,12 +4,21 @@
 
 # One origin: /api/* goes to FastAPI, everything else to the frontend (plan §C.1)
 :80 {
-	# Uploads are capped at 100 MB (Cloudflare Free's limit); the API checks again
+	# Uploads are capped at 100 MB (Cloudflare Free's limit); the API checks again.
+	# max_size only fails once that much has been read (e.g. a body without Content-Length)...
 	request_body {
 		max_size 100MB
 	}
 
 	handle /api/* {
+		# ...so a body announced as too large is refused here, before anything is sent to the API.
+		# 100065536 = 100 MB of file + 64 KiB of multipart framing, as in src/api/uploads/router.py
+		@too_large expression `{http.request.header.Content-Length} != "" && int({http.request.header.Content-Length}) > 100065536`
+		header @too_large Content-Type application/json
+		respond @too_large `{"detail":"Uploads are limited to 100 MB"}` 413 {
+			close
+		}
+
 		reverse_proxy api:8000 {
 			header_up X-Request-ID {http.request.uuid}
 		}

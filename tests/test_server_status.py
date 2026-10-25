@@ -206,6 +206,17 @@ def test_http_metrics_use_route_templates(client, user, active_bundle):
     assert requests_count("unmatched", 404) == unmatched + 1
 
 
+def test_broken_metrics_never_fail_requests(client, monkeypatch, caplog):
+    # Found running the stack: an unwritable PROMETHEUS_MULTIPROC_DIR turned every request into a 500
+    def unwritable(*labels):
+        raise PermissionError("[Errno 13] Permission denied: '/tmp/prometheus/counter_8.db'")
+    monkeypatch.setattr(metrics.REQUESTS, "labels", unwritable)
+    monkeypatch.setattr(metrics, "_observe_failed", False)
+    assert client.get(f"{API}/healthz").status_code == 200
+    assert client.get(f"{API}/healthz").status_code == 200
+    assert caplog.text.count("Recording HTTP metrics failed") == 1      # logged once, not per request
+
+
 def test_metrics_endpoint(client, user, admin, active_bundle, run_queued):
     upload_file(client, user, flows_csv())
     run_queued()
