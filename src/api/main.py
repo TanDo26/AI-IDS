@@ -13,6 +13,8 @@ from src.api import health
 from src.api.admin import router as admin
 from src.api.auth import router as auth
 from src.api.inference import router as inference
+from src.api.results import router as results
+from src.api.runtime.explainers import ExplainerCache
 from src.api.runtime.model_manager import ModelRuntime, create_model_manager
 from src.api.settings import get_settings
 from src.api.uploads import router as uploads
@@ -29,6 +31,7 @@ async def lifespan(app: FastAPI):
     app.state.models = create_model_manager(settings)
     app.state.model_runtime = ModelRuntime(app.state.models, settings, kind="api", listen=True)
     app.state.model_runtime.start()  # picks up model switches
+    app.state.explainers = ExplainerCache(app.state.models)
     yield
     app.state.model_runtime.stop()
 
@@ -59,6 +62,7 @@ def create_app() -> FastAPI:
     api.include_router(auth.router)
     api.include_router(inference.router)
     api.include_router(uploads.router)
+    api.include_router(results.router)
     api.include_router(admin.router)
     app.include_router(api)
     return app
