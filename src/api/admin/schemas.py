@@ -204,3 +204,64 @@ class AuditPage(BaseModel):
     total: int
     page: int
     size: int
+
+
+# ── server status ───────────────────────────────────────────
+
+class GpuStats(BaseModel):
+    name: str
+    utilization_percent: float
+    memory_used_mb: int
+    memory_total_mb: int
+
+
+class SystemStats(BaseModel):
+    cpu_percent: float
+    ram_percent: float
+    ram_used_mb: int
+    ram_total_mb: int
+    disk_percent: float                     # the data volume (uploads + results)
+    disk_free_gb: float
+    disk_total_gb: float
+    disk_warning: bool                      # at or above IDS_DISK_WARNING_PERCENT
+    gpus: list[GpuStats]                    # empty without a visible NVIDIA GPU
+
+
+class Check(BaseModel):
+    ok: bool
+    error: str | None = None
+
+
+class QueueStatus(Check):
+    queued: int | None = None               # waiting in Redis
+    unacknowledged: int | None = None       # delivered to a worker, not finished (running or reserved)
+    workers: list[str] | None = None        # Celery workers that answered a ping
+
+
+class UploadStats(BaseModel):
+    by_status: dict[str, int]               # uploads not deleted
+    failed_last_24h: int
+    stuck: int                              # converting/predicting for over 35 minutes
+
+
+class ModelStatus(LoadedModel):
+    lagging_processes: int | None           # processes reporting a non-active bundle; None without Redis
+
+
+class ApiStatus(BaseModel):
+    version: str
+    process: str                            # host:pid of the API process that answered
+    started_at: datetime
+    uptime_s: int
+
+
+class ServerStatus(BaseModel):
+    checked_at: datetime
+    api: ApiStatus
+    system: SystemStats
+    database: Check
+    redis: Check
+    queue: QueueStatus
+    uploads: UploadStats | None             # None when the database is unreachable
+    model: ModelStatus
+    warnings: list[str]                     # plain-language problems, most urgent first
