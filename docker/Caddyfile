@@ -2,7 +2,7 @@
 	admin off
 }
 
-# One origin: /api/* goes to FastAPI, everything else to the frontend (plan §C.1)
+# One origin: /api/* goes to FastAPI, everything else to the Next.js frontend (plan §C.1, §E)
 :80 {
 	# Uploads are capped at 100 MB (Cloudflare Free's limit); the API checks again.
 	# max_size only fails once that much has been read (e.g. a body without Content-Length)...
@@ -24,8 +24,8 @@
 		}
 	}
 
-	# Replaced by `reverse_proxy web:3000` when the frontend lands (Stage E)
+	# Everything else is the Next.js frontend (web/)
 	handle {
-		respond "AI-IDS: frontend not deployed yet. API docs: /api/docs" 200
+		reverse_proxy web:3000
 	}
 }
