@@ -408,6 +408,10 @@ alembic upgrade head
 uvicorn src.api.main:app --port 8000
 ```
 
+**On Windows:**
+- **Git Bash path rewriting:** Git Bash rewrites `/app/...` arguments of `docker compose exec` into Windows paths. Run `export MSYS_NO_PATHCONV=1` first, or leave out `--store` (it defaults to `/app/model_store`).
+- **Large uploads to `localhost:8080`:** Docker Desktop's port forwarding can stall on very large uploads that the server rejects early, especially when RAM is short. Users reach the stack through the tunnel instead, and Caddy rejects anything announced over 100 MB before it reaches the API.
+
 **Upload processing.** Each upload is queued for the Celery `worker`:
 - it predicts the flows in batches of 50,000;
 - it writes per-flow results to `data/results/<upload_id>/flows.parquet` and a summary: decision counts, known-attack breakdown, and agreement with an uploaded `Label` column (attack vs benign);
