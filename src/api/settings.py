@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Redis pub/sub for immediate model switches + per-process loaded-version reports (off in tests)
     model_events_enabled: bool = True
 
+    disk_warning_percent: int = 85                   # /admin/server warns above this data-volume usage
+    metrics_enabled: bool = True                     # GET /metrics for Prometheus (Caddy doesn't route it)
+
     max_upload_mb: int = 100                         # Cloudflare Free caps request bodies at 100 MB
     retention_days: int = 30
     enable_pcap: bool = False                        # until the flow extractor passes its parity test

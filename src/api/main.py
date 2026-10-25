@@ -7,9 +7,9 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 
-from src.api import health
+from src.api import health, metrics
 from src.api.admin import router as admin
 from src.api.auth import router as auth
 from src.api.inference import router as inference
@@ -56,6 +56,24 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         response.headers["X-Request-ID"] = rid
         return response
+
+    @app.middleware("http")
+    async def http_metrics(request: Request, call_next):
+        start, status = time.perf_counter(), 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            metrics.observe(request.method, metrics.route_label(request.scope), status, time.perf_counter() - start)
+
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus_metrics():
+        """Outside /api: Caddy doesn't route it, so only the Compose network can scrape it."""
+        if not get_settings().metrics_enabled:
+            raise HTTPException(status_code=404)
+        body, content_type = metrics.render()
+        return Response(body, media_type=content_type)
 
     api = APIRouter(prefix=API_PREFIX)
     api.include_router(health.router)

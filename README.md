@@ -446,6 +446,8 @@ training machine.
 | `GET` / `PATCH` | `/admin/users`, `/admin/users/{id}` | Admin: search users; deactivate/reactivate, promote/demote (audited; not yourself, never the last admin) |
 | `GET` | `/admin/usage`, `/admin/usage/{user_id}/daily` | Admin: per-user uploads, bytes, flows, processing time, storage (`from` / `to`); one user's daily series |
 | `GET` | `/admin/uploads`, `/admin/audit` | Admin: every user's uploads (`user_id`, `status`, `deleted`); the audit log (`action`, `actor_id`, `target_type`, `target_id`) |
+| `GET` | `/admin/server` | Admin: CPU/RAM/disk/GPU, database, Redis, Celery queue and workers, upload counts, model state, plain-language warnings |
+| `GET` | `/metrics` | Prometheus metrics, outside `/api` so Caddy never exposes it (scrape `api:8000` inside the Compose network) |
 
 Create the first admin with `python scripts/create_admin.py --email you@example.com --username admin`
 (in Docker: `docker compose exec api python scripts/create_admin.py ...`). Scripts call `/predict` with

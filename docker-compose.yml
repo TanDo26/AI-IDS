@@ -18,9 +18,14 @@ x-app: &app
     IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-false}
     IDS_MODEL_POLL_SECONDS: ${IDS_MODEL_POLL_SECONDS:-30}
     IDS_COOKIE_SECURE: ${IDS_COOKIE_SECURE:-true}
+    IDS_DISK_WARNING_PERCENT: ${IDS_DISK_WARNING_PERCENT:-85}
+    # The api runs 2 uvicorn workers: /metrics sums their HTTP metrics through this directory
+    PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
   volumes:
     - ./model_store:/app/model_store:ro    # bundles are built on the training machine
     - appdata:/data                        # uploads/ and results/
+  tmpfs:
+    - /tmp/prometheus                      # empty at every (re)start, so no stale worker files
 
 services:
   # ── pipeline ─────────────────────────────────────────────

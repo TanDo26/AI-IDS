@@ -4,7 +4,8 @@
 - users: list, (de)activate, promote/demote;
 - usage per user and per day;
 - all uploads;
-- the audit log.
+- the audit log;
+- server status.
 """
 
 from datetime import date
@@ -14,10 +15,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.api.admin import service
+from src.api.admin import service, status
 from src.api.admin.schemas import (
     ActivationOut, AdminUploadOut, AdminUploadPage, AuditOut, AuditPage, DailyUsageOut, LoadedModel,
-    ModelsOverview, ModelVersionOut, ProcessModel, RescanOut, Role, UsageOut, UserAdminOut, UserPage, UserUpdate,
+    ModelsOverview, ModelVersionOut, ProcessModel, RescanOut, Role, ServerStatus, UsageOut, UserAdminOut, UserPage,
+    UserUpdate,
 )
 from src.api.auth.deps import require_admin
 from src.api.db.models import ModelVersion, User
@@ -176,3 +178,13 @@ def audit(page: int = Query(1, ge=1), size: int = Query(50, ge=1, le=200),
                       created_at=log.created_at)
              for log, email in rows]
     return AuditPage(items=items, total=total, page=page, size=size)
+
+
+# ── server ──────────────────────────────────────────────────
+
+@router.get("/server", response_model=ServerStatus)
+def server(request: Request, db: Session = Depends(get_db)):
+    """Host, database, Redis, queue, uploads and model state of the API process that answers,
+    with warnings. Takes about a second (CPU sampling and a worker ping)."""
+    return status.server_status(db, get_settings(), get_model_manager(request), request.app.state.started_at,
+                                request.app.version)
