@@ -244,6 +244,8 @@ AI-IDS/
 - **Python 3.11+** (or Docker)
 - **PyTorch with CUDA** (for GPU-accelerated MLP/LSTM training)
 - CIC-IDS2017 parquet files placed in `dataset/CIC-IDS2017/`
+- **Docker Desktop** to run the web application (API, worker, database, frontend): see [Web frontend](#web-frontend-web)
+- **Node.js 24 LTS** (npm included) only to develop the frontend with hot reload; running the app needs Docker alone
 
 ### Option 1: Run with Docker (Recommended)
 
@@ -462,26 +464,114 @@ Settings are `IDS_*` environment variables (see `.env.example`).
 
 ### Web frontend (`web/`)
 
-[Next.js](https://nextjs.org/) 16 (App Router, TypeScript, Tailwind CSS). Caddy serves it on the same origin as the API: pages at `http://localhost:8080/`, the API under `/api/`.
+[Next.js](https://nextjs.org/) 16 (App Router, TypeScript, Tailwind CSS). Caddy serves it on the same origin as the API: pages at `http://localhost:8080/`, the API under `/api/`. To use the app you only need Docker (step 3). Node.js is needed to change the frontend with hot reload (steps 1 and 2).
 
-```bash
-docker compose --profile app up -d --build     # the stack includes the web service; open http://localhost:8080
+#### 1. Install Node.js and npm
 
-# Development with hot reload (Node.js 24 LTS)
-cd web
-npm install
-npm run dev                                    # http://localhost:3000; /api/* is forwarded to http://localhost:8080
-npm test                                       # unit tests: API client, session rules
-npm run typecheck
+npm ships with Node.js: installing Node.js installs npm too. Use the **24 LTS** line.
 
-# After changing an API endpoint or schema: regenerate the frontend's types
-python scripts/export_openapi.py && cd web && npm run gen:api
+```powershell
+# Windows, any one of:
+winget install OpenJS.NodeJS.LTS                # Windows Package Manager
+#   or the installer from https://nodejs.org (LTS), with "npm package manager" left ticked
+#   or nvm-windows, to switch versions later:  nvm install 24  then  nvm use 24
+
+# Linux / macOS (nvm):
+#   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
+#   nvm install 24
 ```
 
-Without Node.js installed, the same commands run in Docker:
-`docker run --rm -v "$PWD/web:/app" -w /app node:24-alpine sh -c "npm ci && npm test"`.
+Open a **new** terminal, then check:
 
-The session cookies are `Secure`, so browsers keep them over HTTPS and on `http://localhost` only. For plain-http access from another machine, set `IDS_COOKIE_SECURE=false`; the sign-in page says so if the cookies were refused.
+```powershell
+node --version        # v24.x
+npm --version
+```
+
+If PowerShell says *running scripts is disabled on this system* for `npm`, allow local scripts once with
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or call `npm.cmd` instead of `npm`.
+
+Install the frontend's packages, at the exact versions in `package-lock.json`:
+
+```powershell
+cd web
+npm ci                # use `npm install <package>` only to add or upgrade a package
+```
+
+#### 2. Develop with hot reload
+
+The dev server needs the API running. Start the stack (step 3), then:
+
+```powershell
+cd web
+npm run dev           # http://localhost:3000; /api/* is forwarded to the stack on http://localhost:8080
+npm test              # unit tests: API client, session rules
+npm run typecheck     # TypeScript
+```
+
+To use an API on another address, e.g. uvicorn on the host: `$env:IDS_API_ORIGIN="http://localhost:8000"; npm run dev`
+(PowerShell) or `IDS_API_ORIGIN=http://localhost:8000 npm run dev` (bash).
+
+After changing an API endpoint or response model, regenerate the frontend's types:
+
+```powershell
+python scripts/export_openapi.py      # -> web/lib/openapi.json
+cd web; npm run gen:api               # -> web/lib/api-schema.d.ts
+```
+
+#### 3. Run the frontend with Docker
+
+The `app` profile runs the frontend together with the rest of the stack:
+
+| Service | Role |
+|---|---|
+| `web` | Next.js |
+| `api` | FastAPI |
+| `worker`, `beat` | Celery |
+| `postgres`, `redis` | Database and broker |
+| `migrate` | One-shot schema upgrade |
+| `proxy` | Caddy on port 8080 |
+
+```powershell
+# One-time setup
+copy .env.example .env                              # then set IDS_SECRET_KEY and POSTGRES_PASSWORD
+
+# Build the images and start everything (first build takes a few minutes)
+docker compose --profile app up -d --build
+docker compose --profile app ps                     # wait for api and web to show (healthy)
+
+# First admin account (prompts for the password) and the served model
+docker compose exec api python scripts/create_admin.py --email you@example.com --username admin
+python scripts/build_bundle.py --exp EXP-59         # on the host, once: package a trained model into model_store/
+docker compose exec api python scripts/manage_models.py --db rescan
+docker compose exec api python scripts/manage_models.py --db activate <bundle_id>
+```
+
+Open **http://localhost:8080** and sign in.
+
+| Task | Command |
+|---|---|
+| Rebuild only the frontend after changing `web/` | `docker compose --profile app up -d --build web` |
+| Follow the frontend's logs | `docker compose logs -f web` |
+| Stop, keeping data | `docker compose --profile app down` |
+| Stop and delete the database, uploads and results | `docker compose --profile app down -v` |
+
+Without Node.js installed, npm commands run in a container too. The volume `ai-ids-web-node-modules` keeps the packages between runs:
+
+```powershell
+# PowerShell
+docker run --rm -v "${PWD}/web:/app" -v ai-ids-web-node-modules:/app/node_modules -w /app node:24-alpine sh -c "npm ci && npm test && npm run typecheck"
+```
+
+```bash
+# Git Bash (keep it from rewriting /app into a Windows path)
+export MSYS_NO_PATHCONV=1
+docker run --rm -v "$(pwd -W)/web:/app" -v ai-ids-web-node-modules:/app/node_modules -w /app node:24-alpine sh -c "npm ci && npm test && npm run typecheck"
+```
+
+**Notes:**
+- **Session cookies** are `Secure`, so browsers keep them over HTTPS and on `http://localhost` only. For plain-http access from another machine, set `IDS_COOKIE_SECURE=false`; the sign-in page says so if the cookies were refused.
+- **If `http://localhost:8080` stops answering while the containers are healthy**, Docker Desktop's port forwarding is stuck (this happened when the PC ran out of RAM). Restarting Docker Desktop fixes it.
 
 ### Tests
 
