@@ -42,7 +42,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     # Role and status come from the database, so a demotion or deactivation applies at once
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=401, detail="Invalid access token")
+        raise HTTPException(status_code=401, detail="Invalid access token", headers={"WWW-Authenticate": "Bearer"})
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
     return user

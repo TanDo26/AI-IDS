@@ -3,8 +3,10 @@
  *
  * - Cookies go along automatically (credentials: "same-origin"); nothing is kept in localStorage.
  * - POST/PUT/PATCH/DELETE carry X-CSRF-Token, copied from the readable ids_csrf cookie.
- * - A 401 triggers one refresh (shared by every request that hit it at the same time) and one
- *   retry. If the refresh fails, the session is over: onSessionExpired runs (default: go to /login).
+ * - A 401 that asks for authentication (WWW-Authenticate: a missing, expired or invalid access
+ *   token) triggers one refresh, shared by every request that hit it at the same time, and one
+ *   retry. Other 401s answer what the user typed (wrong password) and are returned as they are.
+ *   If the refresh fails, the session is over: onSessionExpired runs (default: go to /login).
  * - Errors become ApiError with FastAPI's `detail` turned into a readable message.
  */
 import { CSRF_COOKIE, CSRF_HEADER, isPublicPath } from "@/lib/session";
@@ -12,7 +14,7 @@ import { CSRF_COOKIE, CSRF_HEADER, isPublicPath } from "@/lib/session";
 export const API_BASE = "/api/v1";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-// Auth calls whose 401 means "wrong credentials / no session", not "access token expired"
+// Never refreshed, whatever they answer: they are the session's own endpoints
 const NO_REFRESH = ["/auth/login", "/auth/signup", "/auth/refresh", "/auth/logout"];
 
 export class ApiError extends Error {
@@ -20,6 +22,7 @@ export class ApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly detail?: unknown,
+    public readonly retryAfter?: number,   // seconds, from Retry-After (429)
   ) {
     super(message);
     this.name = "ApiError";
@@ -59,10 +62,14 @@ export function errorMessage(body: unknown, status: number): string {
   return status >= 500 ? "The server had a problem; please try again." : `Request failed (${status})`;
 }
 
-let sessionExpiredHandler = () => {
+export function defaultSessionExpired() {
   const { pathname, search } = window.location;
-  if (!isPublicPath(pathname)) window.location.assign(`/login?next=${encodeURIComponent(pathname + search)}`);
-};
+  if (!isPublicPath(pathname)) {
+    window.location.assign(`/login?next=${encodeURIComponent(pathname + search)}&expired=1`);
+  }
+}
+
+let sessionExpiredHandler = defaultSessionExpired;
 
 /** Replace what happens when the session is over (tests, or a custom notice). */
 export function onSessionExpired(handler: () => void) {
@@ -99,7 +106,8 @@ export function refreshSession(): Promise<boolean> {
 export async function apiFetch(path: string, options: RequestOptions = {}): Promise<Response> {
   const method = (options.method ?? (options.json !== undefined || options.body ? "POST" : "GET")).toUpperCase();
   const response = await send(path, method, options);
-  if (response.status !== 401 || NO_REFRESH.some((p) => path.startsWith(p))) return response;
+  const asksForAuth = response.status === 401 && response.headers.has("WWW-Authenticate");
+  if (!asksForAuth || NO_REFRESH.some((p) => path.startsWith(p))) return response;
   if (await refreshSession()) return send(path, method, options);
   sessionExpiredHandler();
   return response;
@@ -119,6 +127,9 @@ async function readBody(response: Response): Promise<unknown> {
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await apiFetch(path, options);
   const body = await readBody(response);
-  if (!response.ok) throw new ApiError(response.status, errorMessage(body, response.status), body);
+  if (!response.ok) {
+    const retryAfter = Number(response.headers.get("Retry-After")) || undefined;
+    throw new ApiError(response.status, errorMessage(body, response.status), body, retryAfter);
+  }
   return body as T;
 }

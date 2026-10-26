@@ -1,16 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
-import { API_BASE, ApiError, api, apiFetch, errorMessage, onSessionExpired, readCookie } from "@/lib/api";
+import {
+  API_BASE, ApiError, api, apiFetch, defaultSessionExpired, errorMessage, onSessionExpired, readCookie,
+} from "@/lib/api";
 
 type Call = { path: string; method: string; headers: Record<string, string>; body?: unknown };
+type Reply = { status: number; body?: unknown; headers?: Record<string, string> };
 
 let calls: Call[];
-let replies: Array<{ status: number; body?: unknown } | ((call: Call) => { status: number; body?: unknown })>;
+let replies: Array<Reply | ((call: Call) => Reply)>;
 let expired: Mock<() => void>;
 
-function json(status: number, body?: unknown) {
-  return new Response(body === undefined ? null : JSON.stringify(body), { status });
-}
+// What get_current_user answers for a missing, expired or invalid access token
+const TOKEN_EXPIRED: Reply = { status: 401, body: { detail: "Access token expired" }, headers: { "WWW-Authenticate": "Bearer" } };
 
 beforeEach(() => {
   calls = [];
@@ -22,8 +24,8 @@ beforeEach(() => {
     const call: Call = { path: url.slice(API_BASE.length), method: init.method!, headers: init.headers as Record<string, string>, body: init.body };
     calls.push(call);
     const reply = replies.shift() ?? { status: 500 };
-    const { status, body } = typeof reply === "function" ? reply(call) : reply;
-    return json(status, body);
+    const { status, body, headers } = typeof reply === "function" ? reply(call) : reply;
+    return new Response(body === undefined ? null : JSON.stringify(body), { status, headers });
   }));
 });
 
@@ -56,7 +58,7 @@ describe("requests", () => {
 
 describe("expired access token", () => {
   it("refreshes once and retries", async () => {
-    replies.push({ status: 401 }, { status: 200 }, { status: 200, body: { ok: true } });
+    replies.push(TOKEN_EXPIRED, { status: 200 }, { status: 200, body: { ok: true } });
     expect(await api("/uploads")).toEqual({ ok: true });
     expect(calls.map((c) => c.path)).toEqual(["/uploads", "/auth/refresh", "/uploads"]);
     expect(calls[1].headers["X-CSRF-Token"]).toBe("tok=en");
@@ -66,7 +68,7 @@ describe("expired access token", () => {
   it("shares one refresh between concurrent requests (a refresh token works once)", async () => {
     let refreshes = 0;
     replies.push(
-      { status: 401 }, { status: 401 },
+      TOKEN_EXPIRED, TOKEN_EXPIRED,
       (c) => (c.path === "/auth/refresh" ? (refreshes++, { status: 200 }) : { status: 500 }),
       { status: 200, body: 1 }, { status: 200, body: 2 },
     );
@@ -76,23 +78,30 @@ describe("expired access token", () => {
   });
 
   it("ends the session when the refresh fails", async () => {
-    replies.push({ status: 401 }, { status: 401, body: { detail: "Session expired; please log in again" } });
+    replies.push(TOKEN_EXPIRED, { status: 401, body: { detail: "Session expired; please log in again" } });
     await expect(api("/uploads")).rejects.toMatchObject({ status: 401 });
     expect(expired).toHaveBeenCalledTimes(1);
   });
 
   it.each(["/auth/login", "/auth/signup", "/auth/refresh", "/auth/logout"])(
-    "never refreshes for %s (its 401 is the answer)", async (path) => {
-      replies.push({ status: 401, body: { detail: "Incorrect email or password" } });
+    "never refreshes for %s", async (path) => {
+      replies.push({ ...TOKEN_EXPIRED, body: { detail: "Incorrect email or password" } });
       await expect(api(path, { method: "POST" })).rejects.toThrow("Incorrect email or password");
       expect(calls).toHaveLength(1);
       expect(expired).not.toHaveBeenCalled();
     });
 
   it("refreshes for /auth/me", async () => {
-    replies.push({ status: 401 }, { status: 200 }, { status: 200, body: { id: 1 } });
+    replies.push(TOKEN_EXPIRED, { status: 200 }, { status: 200, body: { id: 1 } });
     await api("/auth/me");
     expect(calls).toHaveLength(3);
+  });
+
+  it("returns a 401 without WWW-Authenticate as it is: it answers what the user typed", async () => {
+    replies.push({ status: 401, body: { detail: "Current password is incorrect" } });
+    await expect(api("/auth/password", { json: {} })).rejects.toThrow("Current password is incorrect");
+    expect(calls.map((c) => c.path)).toEqual(["/auth/password"]);   // no refresh, no retry
+    expect(expired).not.toHaveBeenCalled();
   });
 
   it("leaves non-JSON responses to the caller with apiFetch", async () => {
@@ -102,12 +111,37 @@ describe("expired access token", () => {
   });
 });
 
+describe("session expired", () => {
+  function stubLocation(pathname: string, search = "") {
+    const assign = vi.fn();
+    vi.stubGlobal("window", { location: { pathname, search, assign } });
+    return assign;
+  }
+
+  it("sends the user to /login, remembering the page and saying why", () => {
+    const assign = stubLocation("/uploads", "?page=2");
+    defaultSessionExpired();
+    expect(assign).toHaveBeenCalledWith("/login?next=%2Fuploads%3Fpage%3D2&expired=1");
+  });
+
+  it("does nothing on a public page (no redirect loop on /login)", () => {
+    const assign = stubLocation("/login");
+    defaultSessionExpired();
+    expect(assign).not.toHaveBeenCalled();
+  });
+});
+
 describe("errors", () => {
   it("raises ApiError with the server's message", async () => {
     replies.push({ status: 409, body: { detail: "That email is already registered" } });
     const error = await api("/auth/signup", { json: {} }).catch((e) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ status: 409, message: "That email is already registered" });
+  });
+
+  it("keeps Retry-After of a 429", async () => {
+    replies.push({ status: 429, body: { detail: "Too many requests, try again later." }, headers: { "Retry-After": "42" } });
+    await expect(api("/auth/login", { json: {} })).rejects.toMatchObject({ status: 429, retryAfter: 42 });
   });
 
   it.each([

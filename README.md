@@ -547,7 +547,7 @@ docker compose exec api python scripts/manage_models.py --db rescan
 docker compose exec api python scripts/manage_models.py --db activate <bundle_id>
 ```
 
-Open **http://localhost:8080** and sign in.
+Open **http://localhost:8080** and sign in. New users create an account at `/signup` (they get the `user` role); `/account` shows the profile and changes the password.
 
 | Task | Command |
 |---|---|
