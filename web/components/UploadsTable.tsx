@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { UploadStatus } from "@/components/UploadStatus";
@@ -37,7 +38,10 @@ function Row({ upload, compact }: { upload: Upload; compact: boolean }) {
   return (
     <tr data-upload-id={upload.id}>
       <td className="max-w-xs px-4 py-2">
-        <span className="block truncate font-medium" title={upload.original_filename}>{upload.original_filename}</span>
+        <Link href={`/uploads/${upload.id}`} title={upload.original_filename}
+              className="block truncate font-medium text-brand-700 hover:underline">
+          {upload.original_filename}
+        </Link>
         {upload.status === "failed" && upload.error && (
           <span className="block text-xs text-red-600">{upload.error}</span>
         )}

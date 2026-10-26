@@ -553,8 +553,9 @@ Open **http://localhost:8080** and sign in. New users create an account at `/sig
 | Page | What it shows |
 |---|---|
 | `/dashboard` | Your totals (uploads, flows analysed, known attacks, unknowns, data uploaded), a quick upload area and the recent uploads |
-| `/uploads/new` | Drag and drop a CICFlowMeter CSV (≤ 100 MB, checked before sending) with transfer progress. A CSV missing features the active model needs is refused with the list |
-| `/uploads` | Your uploads with live status while they're analysed; filter by status; delete |
+| `/uploads/new` | Drag and drop a CICFlowMeter CSV (≤ 100 MB, checked before sending) with transfer progress. A CSV missing features the active model needs is refused with the list. After sending, you land on the upload's results page |
+| `/uploads` | Your uploads with live status while they're analysed; filter by status; delete. The file name opens its results |
+| `/uploads/[id]` | Live progress while it's analysed, then the results: benign / unknown / known-attack counts (unknowns split into low confidence and anomalous), known attacks per type, the model used and the agreement with the file's `Label`, and every flow in a table you can filter by decision or class, sort and page through. Clicking a count or a bar filters the table. Download the flows as CSV, optionally with the model's input features |
 | `/account` | Profile and password change |
 
 | Task | Command |
