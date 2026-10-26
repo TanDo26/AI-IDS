@@ -2079,6 +2079,17 @@
             ],
             "title": "Class Name"
           },
+          "benign": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benign"
+          },
           "output_space": {
             "type": "string",
             "title": "Output Space"

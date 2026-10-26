@@ -45,6 +45,7 @@ def test_known_or_benign_explains_the_predicted_class(explainer, name):
     out = explain(explainer, name)
     [explanation] = out["explanations"]
     assert explanation["target"] == "class" and explanation["class"] == out["predicted_class"]
+    assert explanation["benign"] == (name == "benign")
     assert explanation["output_space"] == "probability"         # RandomForest
     # Every feature is listed (6 < 15), so SHAP's additivity holds: base + contributions = probability
     total = explanation["base_value"] + sum(i["contribution"] for i in explanation["contributions"])
@@ -55,6 +56,7 @@ def test_low_confidence_explains_the_top_two_classes(explainer):
     out = explain(explainer, "portscan")
     classes = [e["class"] for e in out["explanations"]]
     assert len(classes) == 2 and classes[0] == out["predicted_class"] and classes[1] != classes[0]
+    assert [e["benign"] for e in out["explanations"]] == [c == BENIGN for c in classes]
 
 
 def test_anomalous_explains_the_anomaly_score(explainer):

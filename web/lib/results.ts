@@ -4,7 +4,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { API_BASE, ApiError, api } from "@/lib/api";
-import type { Decision, FlowPage, Summary, Upload } from "@/lib/types";
+import type { Decision, Flow, FlowPage, Summary, Upload } from "@/lib/types";
 import { isActive } from "@/lib/uploads";
 
 export const DECISIONS: Record<Decision, { label: string; swatch: string; badge: string; hint: string }> = {
@@ -73,12 +73,23 @@ export async function downloadExport(id: string, q: Parameters<typeof exportPath
   window.location.assign(`${API_BASE}${exportPath(id, q)}`);
 }
 
+/** "10.0.0.1:443 → 10.0.0.2:80" from the flow's metadata, or null if the upload had no addresses. */
+export function endpoints(metadata: Flow["metadata"]): string | null {
+  const side = (ip?: string | null, port?: string | null) => (ip ? (port ? `${ip}:${port}` : ip) : "?");
+  if (!metadata["Src IP"] && !metadata["Dst IP"]) return null;
+  return `${side(metadata["Src IP"], metadata["Src Port"])} → ${side(metadata["Dst IP"], metadata["Dst Port"])}`;
+}
+
+// A 4xx won't change by asking again
+export const retryServerErrors = (failures: number, error: Error) =>
+  !(error instanceof ApiError && error.status < 500) && failures < 2;
+
 export function useUpload(id: string) {
   return useQuery({
     queryKey: ["uploads", id],
     queryFn: () => api<Upload>(`/uploads/${id}`),
     refetchInterval: (q) => (q.state.data && isActive(q.state.data.status) ? 1500 : false),
-    retry: (failures, error) => !(error instanceof ApiError && error.status < 500) && failures < 2,
+    retry: retryServerErrors,
   });
 }
 

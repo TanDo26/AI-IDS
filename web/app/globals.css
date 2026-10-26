@@ -14,6 +14,10 @@
   --color-status-good: #0ca30c;
   --color-status-warning: #fab219;
   --color-status-critical: #d03b3b;
+  /* SHAP direction, the reference diverging pair (CVD ΔE 21.6): toward an attack or unusual,
+     toward benign or typical */
+  --color-viz-alarm: #e34948;
+  --color-viz-normal: #2a78d6;
 }
 
 html {

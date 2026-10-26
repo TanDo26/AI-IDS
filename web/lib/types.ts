@@ -23,6 +23,8 @@ export type Flow = Schemas["FlowOut"];
 export type FlowPage = Schemas["FlowPage"];
 export type Decision = Flow["decision"];
 export type Explanation = Schemas["ExplanationOut"];
+export type Attribution = Schemas["Explanation"];      // one target's SHAP contributions
+export type Contribution = Schemas["Contribution"];
 
 // admin
 export type ModelsOverview = Schemas["ModelsOverview"];

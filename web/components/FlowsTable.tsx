@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 
+import { ExplainDrawer } from "@/components/ExplainDrawer";
 import { Alert } from "@/components/ui";
 import { formatNumber } from "@/lib/format";
-import { DECISIONS, DECISION_ORDER, REASONS, downloadExport, nextSort, useFlows, type FlowQuery } from "@/lib/results";
+import {
+  DECISIONS, DECISION_ORDER, REASONS, downloadExport, endpoints, nextSort, useFlows, type FlowQuery,
+} from "@/lib/results";
 import type { Decision, Flow, Summary } from "@/lib/types";
 
 const TAB = "rounded-md px-3 py-1.5 text-sm";
@@ -14,6 +17,7 @@ export function FlowsTable({ summary, query, onQueryChange }:
   { summary: Summary; query: FlowQuery; onQueryChange: (query: FlowQuery) => void }) {
   const id = summary.upload_id;
   const flows = useFlows(id, query);
+  const [explaining, setExplaining] = useState<Flow | null>(null);
   const hasLabel = summary.label_agreement !== null;
   const classes = Object.keys(summary.attack_breakdown).sort();
   const counts: Record<Decision, number> = {
@@ -56,6 +60,9 @@ export function FlowsTable({ summary, query, onQueryChange }:
       {flows.data && (
         <div className={`overflow-x-auto ${flows.isPlaceholderData ? "opacity-60" : ""}`}>
           <table className="w-full text-left text-sm">
+            <caption className="px-3 pt-2 text-left text-xs text-slate-500">
+              Click a flow to see what drove its decision.
+            </caption>
             <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <SortHeader label="Row" column="row" query={query} onSort={set} />
@@ -71,7 +78,10 @@ export function FlowsTable({ summary, query, onQueryChange }:
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {flows.data.items.map((f) => <Row key={f.row} flow={f} hasLabel={hasLabel} />)}
+              {flows.data.items.map((f) => (
+                <Row key={f.row} flow={f} hasLabel={hasLabel} open={explaining?.row === f.row}
+                     onExplain={() => setExplaining(f)} />
+              ))}
             </tbody>
           </table>
           {flows.data.items.length === 0 && (
@@ -92,6 +102,7 @@ export function FlowsTable({ summary, query, onQueryChange }:
                   className="rounded-md px-3 py-1.5 hover:bg-slate-100 disabled:opacity-40">Next</button>
         </nav>
       )}
+      <ExplainDrawer uploadId={id} flow={explaining} onClose={() => setExplaining(null)} />
     </div>
   );
 }
@@ -112,22 +123,26 @@ function SortHeader({ label, column, query, onSort, right = false, hint }: {
   );
 }
 
-function endpoint(ip?: string | null, port?: string | null): string {
-  return ip ? (port ? `${ip}:${port}` : ip) : "?";
-}
-
-function Row({ flow, hasLabel }: { flow: Flow; hasLabel: boolean }) {
-  const m = flow.metadata;
-  const hasEndpoints = Boolean(m["Src IP"] || m["Dst IP"]);
+/**
+ * A click anywhere on the row explains it, unless the click ended a text selection (copying an
+ * address). The row number is the button for keyboard users.
+ */
+function Row({ flow, hasLabel, open, onExplain }:
+  { flow: Flow; hasLabel: boolean; open: boolean; onExplain: () => void }) {
+  const ends = endpoints(flow.metadata);
   const decision = DECISIONS[flow.decision];
   return (
-    <tr>
-      <td className="px-3 py-2 tabular-nums text-slate-500">{flow.row}</td>
+    <tr onClick={() => { if (!window.getSelection()?.toString()) onExplain(); }}
+        className={`cursor-pointer ${open ? "bg-brand-50" : "hover:bg-slate-50"}`}>
+      <td className="px-3 py-2">
+        <button onClick={(e) => { e.stopPropagation(); onExplain(); }} aria-label={`Explain flow ${flow.row}`}
+                className="tabular-nums text-brand-700 hover:underline">
+          {flow.row}
+        </button>
+      </td>
       <td className="whitespace-nowrap px-3 py-2">
-        {hasEndpoints ? (
-          <span className="font-mono text-xs">{endpoint(m["Src IP"], m["Src Port"])} → {endpoint(m["Dst IP"], m["Dst Port"])}</span>
-        ) : <span className="text-slate-400">—</span>}
-        {m.Timestamp && <span className="block text-xs text-slate-500">{m.Timestamp}</span>}
+        {ends ? <span className="font-mono text-xs">{ends}</span> : <span className="text-slate-400">—</span>}
+        {flow.metadata.Timestamp && <span className="block text-xs text-slate-500">{flow.metadata.Timestamp}</span>}
       </td>
       {hasLabel && <td className="whitespace-nowrap px-3 py-2 text-slate-600">{flow.label ?? "—"}</td>}
       <td className="whitespace-nowrap px-3 py-2">
