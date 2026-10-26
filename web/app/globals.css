@@ -5,6 +5,15 @@
   --color-brand-50: #eff6ff;
   --color-brand-600: #2563eb;
   --color-brand-700: #1d4ed8;
+
+  /* Charts (validated with the dataviz palette checks against the white card surface).
+     Decisions use the status palette, always beside a text label: benign, unknown, known attack,
+     in that order, because green next to red fails colour-vision separation (deutan ΔE 4.1). */
+  --color-viz-bar: #2a78d6;
+  --color-viz-baseline: #c3c2b7;
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-critical: #d03b3b;
 }
 
 html {

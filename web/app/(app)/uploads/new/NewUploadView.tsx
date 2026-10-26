@@ -24,9 +24,9 @@ export function NewUploadView() {
       {noModel && <Alert tone="info">No model is active yet, so uploads can&apos;t be analysed. Ask an admin to activate one.</Alert>}
       <UploadDropzone
         disabled={noModel}
-        onUploaded={async () => {
-          await invalidate();
-          router.push("/uploads");
+        onUploaded={(upload) => {
+          invalidate();
+          router.push(`/uploads/${upload.id}`);
         }}
       />
     </div>

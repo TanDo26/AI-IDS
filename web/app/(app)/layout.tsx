@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { useLogout, useMe } from "@/lib/auth";
 
-// Pages are added here as they are built (results, admin)
+// Pages are added here as they are built (admin); an upload's results open from /uploads
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/uploads", label: "Uploads" },
@@ -36,7 +36,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
+        {/* On a phone the account links wrap to a second line instead of widening the page */}
+        <div className="mx-auto flex min-h-14 max-w-6xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2">
           <Link href="/dashboard" className="font-semibold text-brand-700">AI-IDS</Link>
           <nav className="flex gap-1">
             {NAV.map((item) => (
