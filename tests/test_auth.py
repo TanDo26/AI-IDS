@@ -143,7 +143,21 @@ def test_token_of_a_deleted_user(client, user, db):
     headers = bearer(user)
     db.delete(user)
     db.commit()
-    assert client.get(f"{API}/auth/me", headers=headers).status_code == 401
+    r = client.get(f"{API}/auth/me", headers=headers)
+    assert r.status_code == 401 and r.headers["WWW-Authenticate"] == "Bearer"
+
+
+def test_only_credential_failures_ask_for_authentication(client, user):
+    # The frontend refreshes the session only on a 401 with WWW-Authenticate. Answers to what the
+    # user typed (wrong password, wrong current password) must not carry it, or a typo would
+    # rotate the session and could even sign the user out.
+    expired = {"Authorization": f"Bearer {security.create_access_token(user.id, minutes=-1)}"}
+    for r in (client.get(f"{API}/auth/me"), client.get(f"{API}/auth/me", headers=expired)):
+        assert r.status_code == 401 and r.headers["WWW-Authenticate"] == "Bearer"
+    for r in (client.post(f"{API}/auth/login", json={"email": user.email, "password": "wrong-password"}),
+              client.post(f"{API}/auth/password", headers=bearer(user),
+                          json={"current_password": "wrong-password", "new_password": "another-good-password"})):
+        assert r.status_code == 401 and "WWW-Authenticate" not in r.headers
 
 
 # ── CSRF ────────────────────────────────────────────────────

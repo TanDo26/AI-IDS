@@ -45,7 +45,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
-            <span className="text-slate-600">{user.username}</span>
+            <Link href="/account" className={`rounded-md px-2 py-1 ${pathname.startsWith("/account")
+              ? "bg-brand-50 font-medium text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}>
+              {user.username}
+            </Link>
             {user.role === "admin" && (
               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">admin</span>
             )}
