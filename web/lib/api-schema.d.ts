@@ -205,6 +205,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/uploads/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Upload Stats
+         * @description Your totals: uploads per status, bytes, flows, known attacks and unknowns found.
+         */
+        get: operations["upload_stats_api_v1_uploads_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/uploads/{upload_id}": {
         parameters: {
             query?: never;
@@ -1183,6 +1203,28 @@ export interface components {
             /** Stuck */
             stuck: number;
         };
+        /**
+         * UploadTotals
+         * @description The signed-in user's totals over the uploads they still have.
+         */
+        UploadTotals: {
+            /** Uploads */
+            uploads: number;
+            /** By Status */
+            by_status: {
+                [key: string]: number;
+            };
+            /** Bytes */
+            bytes: number;
+            /** Flows */
+            flows: number;
+            /** Known Attacks */
+            known_attacks: number;
+            /** Unknown */
+            unknown: number;
+            /** Last Upload At */
+            last_upload_at: string | null;
+        };
         /** UsageOut */
         UsageOut: {
             /** From */
@@ -1621,6 +1663,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+        };
+    };
+    upload_stats_api_v1_uploads_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadTotals"];
                 };
             };
         };

@@ -442,6 +442,7 @@ training machine.
 | `POST` | `/batch_predict` | Up to 10,000 flows (login required) |
 | `POST` | `/uploads` | Upload a CICFlowMeter CSV as multipart field `file` (≤ 100 MB) and queue it for processing. The type is read from the content, and missing features are listed at once. PCAP / PCAPNG only with `IDS_ENABLE_PCAP=true`. |
 | `GET` | `/uploads`, `/uploads/{id}` | Your uploads (newest first, `page` / `size` / `status`), or one upload's status and progress |
+| `GET` | `/uploads/stats` | Your totals over the uploads you still have: per status, bytes, flows, known attacks, unknowns |
 | `DELETE` | `/uploads/{id}` | Delete the file and its results (owner or admin); it still counts in usage totals |
 | `GET` | `/uploads/{id}/summary` | Decision counts, known attacks per type, unknowns per reason, label agreement, the model that produced them |
 | `GET` | `/uploads/{id}/flows` | Paginated flows (`page`, `size` ≤ 500), filtered by `decision` / `class_name`, sorted by `sort` (e.g. `-anomaly_score`) |
@@ -547,7 +548,14 @@ docker compose exec api python scripts/manage_models.py --db rescan
 docker compose exec api python scripts/manage_models.py --db activate <bundle_id>
 ```
 
-Open **http://localhost:8080** and sign in. New users create an account at `/signup` (they get the `user` role); `/account` shows the profile and changes the password.
+Open **http://localhost:8080** and sign in. New users create an account at `/signup` (they get the `user` role).
+
+| Page | What it shows |
+|---|---|
+| `/dashboard` | Your totals (uploads, flows analysed, known attacks, unknowns, data uploaded), a quick upload area and the recent uploads |
+| `/uploads/new` | Drag and drop a CICFlowMeter CSV (≤ 100 MB, checked before sending) with transfer progress. A CSV missing features the active model needs is refused with the list |
+| `/uploads` | Your uploads with live status while they're analysed; filter by status; delete |
+| `/account` | Profile and password change |
 
 | Task | Command |
 |---|---|

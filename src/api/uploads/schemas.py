@@ -37,3 +37,14 @@ class UploadPage(BaseModel):
     total: int
     page: int
     size: int
+
+
+class UploadTotals(BaseModel):
+    """The signed-in user's totals over the uploads they still have."""
+    uploads: int
+    by_status: dict[str, int]
+    bytes: int                      # uploaded
+    flows: int                      # processed
+    known_attacks: int              # flows recognised as a known attack type
+    unknown: int                    # flows flagged as unknown (low confidence or anomalous)
+    last_upload_at: datetime | None

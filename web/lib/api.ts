@@ -76,6 +76,11 @@ export function onSessionExpired(handler: () => void) {
   sessionExpiredHandler = handler;
 }
 
+/** The session is over (for requests made outside apiFetch, e.g. uploads with progress). */
+export function expireSession() {
+  sessionExpiredHandler();
+}
+
 function send(path: string, method: string, options: RequestOptions): Promise<Response> {
   const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
   let body = options.body;

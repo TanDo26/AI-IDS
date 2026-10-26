@@ -129,6 +129,24 @@ def test_redelivered_after_a_crash(uploaded, run_queued, db):
     assert run_queued() == ["completed"]
 
 
+def test_upload_stats_are_your_own_live_uploads(client, user, make_user, uploaded, run_queued, db):
+    first, second, gone = uploaded(), uploaded(flows_csv(n_copies=2)), uploaded()
+    bob = make_user("bob@example.com")
+    upload_file(client, bob, flows_csv())
+    run_queued()
+    client.delete(f"{API}/uploads/{gone}", headers=bearer(user))
+
+    r = client.get(f"{API}/uploads/stats", headers=bearer(user))     # not taken for an upload id
+    assert r.status_code == 200
+    body = r.json()
+    sizes = [db.get(Upload, uuid.UUID(i)).size_bytes for i in (first, second)]
+    assert (body["uploads"], body["by_status"], body["bytes"]) == (2, {"completed": 2}, sum(sizes))
+    assert (body["flows"], body["known_attacks"], body["unknown"]) == (12, 3, 6)   # 4 + 8 flows; 1 and 2 per copy
+    assert body["last_upload_at"] is not None
+    empty = client.get(f"{API}/uploads/stats", headers=bearer(make_user("carol@example.com"))).json()
+    assert (empty["uploads"], empty["flows"], empty["last_upload_at"]) == (0, 0, None)
+
+
 # ── expected failures ───────────────────────────────────────
 
 def failed_with(db, settings, upload_id, text):

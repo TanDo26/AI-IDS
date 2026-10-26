@@ -17,7 +17,7 @@ from src.api.ratelimit import UPLOADS_PER_USER, rate_limit
 from src.api.runtime.model_manager import get_model_manager
 from src.api.settings import get_settings
 from src.api.uploads import processing, service
-from src.api.uploads.schemas import UploadOut, UploadPage, UploadStatus
+from src.api.uploads.schemas import UploadOut, UploadPage, UploadStatus, UploadTotals
 from src.api.uploads.validation import UploadRejected
 from src.api.worker import tasks
 
@@ -80,6 +80,13 @@ def list_uploads(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100)
     """Your uploads, newest first."""
     items, total = service.list_uploads(db, user.id, page, size, status)
     return UploadPage(items=items, total=total, page=page, size=size)
+
+
+# Before /{upload_id}: otherwise "stats" would be parsed (and rejected) as an upload id
+@router.get("/stats", response_model=UploadTotals)
+def upload_stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Your totals: uploads per status, bytes, flows, known attacks and unknowns found."""
+    return service.upload_stats(db, user.id)
 
 
 @router.get("/{upload_id}", response_model=UploadOut)
