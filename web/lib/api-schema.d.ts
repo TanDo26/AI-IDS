@@ -742,6 +742,8 @@ export interface components {
             class?: number | null;
             /** Class Name */
             class_name?: string | null;
+            /** Benign */
+            benign?: boolean | null;
             /** Output Space */
             output_space: string;
             /** Base Value */

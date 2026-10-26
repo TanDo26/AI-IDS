@@ -170,6 +170,7 @@ def test_explain_each_decision(client, user, completed, row):
     else:
         [e] = explanations
         assert e["target"] == "class" and e["class"] == cls and e["output_space"] == "probability"
+        assert e["benign"] == (decision == "benign")
     assert all(len(e["contributions"]) == 6 for e in explanations)
 
 

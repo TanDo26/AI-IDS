@@ -66,6 +66,7 @@ class Explanation(BaseModel):
     target: Literal["class", "anomaly"]
     class_: int | None = Field(None, alias="class")
     class_name: str | None = None
+    benign: bool | None = None              # class explanations: is this the benign class?
     output_space: str                       # probability | log_odds | anomaly_score
     base_value: float
     contributions: list[Contribution]
