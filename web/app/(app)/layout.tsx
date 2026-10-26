@@ -6,8 +6,11 @@ import { usePathname } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { useLogout, useMe } from "@/lib/auth";
 
-// Pages are added here as they are built (uploads, results, admin)
-const NAV = [{ href: "/dashboard", label: "Dashboard" }];
+// Pages are added here as they are built (results, admin)
+const NAV = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/uploads", label: "Uploads" },
+];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

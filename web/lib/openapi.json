@@ -407,6 +407,28 @@
         }
       }
     },
+    "/api/v1/uploads/stats": {
+      "get": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Upload Stats",
+        "description": "Your totals: uploads per status, bytes, flows, known attacks and unknowns found.",
+        "operationId": "upload_stats_api_v1_uploads_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadTotals"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/uploads/{upload_id}": {
       "get": {
         "tags": [
@@ -3543,6 +3565,61 @@
           "stuck"
         ],
         "title": "UploadStats"
+      },
+      "UploadTotals": {
+        "properties": {
+          "uploads": {
+            "type": "integer",
+            "title": "Uploads"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Status"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          },
+          "flows": {
+            "type": "integer",
+            "title": "Flows"
+          },
+          "known_attacks": {
+            "type": "integer",
+            "title": "Known Attacks"
+          },
+          "unknown": {
+            "type": "integer",
+            "title": "Unknown"
+          },
+          "last_upload_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Upload At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uploads",
+          "by_status",
+          "bytes",
+          "flows",
+          "known_attacks",
+          "unknown",
+          "last_upload_at"
+        ],
+        "title": "UploadTotals",
+        "description": "The signed-in user's totals over the uploads they still have."
       },
       "UsageOut": {
         "properties": {

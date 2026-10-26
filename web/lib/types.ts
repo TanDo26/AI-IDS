@@ -17,6 +17,7 @@ export type PasswordChangeRequest = Schemas["PasswordChangeRequest"];
 export type Upload = Schemas["UploadOut"];
 export type UploadPage = Schemas["UploadPage"];
 export type UploadStatus = Upload["status"];
+export type UploadTotals = Schemas["UploadTotals"];
 export type Summary = Schemas["SummaryOut"];
 export type Flow = Schemas["FlowOut"];
 export type FlowPage = Schemas["FlowPage"];
