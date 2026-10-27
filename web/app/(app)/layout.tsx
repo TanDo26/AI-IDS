@@ -6,10 +6,11 @@ import { usePathname } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { useLogout, useMe } from "@/lib/auth";
 
-// Pages are added here as they are built (admin); an upload's results open from /uploads
+// An upload's results open from /uploads; admin sections have their own tabs under /admin
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/uploads", label: "Uploads" },
+  { href: "/admin", label: "Admin", admin: true },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -40,7 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex min-h-14 max-w-6xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2">
           <Link href="/dashboard" className="font-semibold text-brand-700">AI-IDS</Link>
           <nav className="flex gap-1">
-            {NAV.map((item) => (
+            {NAV.filter((item) => !item.admin || user.role === "admin").map((item) => (
               <Link key={item.href} href={item.href}
                     className={`rounded-md px-3 py-1.5 text-sm ${pathname.startsWith(item.href)
                       ? "bg-brand-50 font-medium text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}>

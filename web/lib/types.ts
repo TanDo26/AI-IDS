@@ -29,6 +29,10 @@ export type Contribution = Schemas["Contribution"];
 // admin
 export type ModelsOverview = Schemas["ModelsOverview"];
 export type ModelVersion = Schemas["ModelVersionOut"];
+export type ModelMetrics = Schemas["ModelMetrics"];
+export type ProcessModel = Schemas["ProcessModel"];
+export type RescanResult = Schemas["RescanOut"];
+export type Activation = Schemas["ActivationOut"];
 export type ServerStatus = Schemas["ServerStatus"];
 export type AdminUser = Schemas["UserAdminOut"];
 export type UserPage = Schemas["UserPage"];
