@@ -125,6 +125,15 @@ def test_rescan_retires_missing_bundles(db, register_bundle, registry, model_sto
     assert statuses(db)[TINY_A] == "available"
 
 
+def test_rescan_refuses_a_missing_store(client, admin, register_bundle, registry, model_store, db):
+    # Found running the stack: a wrong mount path made rescan see an "empty" store
+    register_bundle(TINY_A)
+    shutil.rmtree(model_store.root)
+    r = client.post(f"{MODELS}/rescan", headers=bearer(admin))
+    assert r.status_code == 503 and "isn't mounted" in r.json()["detail"]
+    assert statuses(db) == {TINY_A: "active"} and versions(db)[TINY_A].invalid_reason is None
+
+
 def test_the_active_version_keeps_serving_when_its_files_break(db, register_bundle, registry, model_store):
     register_bundle(TINY_A)
     tamper(model_store.root / TINY_A)

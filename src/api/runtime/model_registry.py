@@ -80,6 +80,9 @@ class ModelRegistry:
         library versions do, and both are checked. The active version keeps serving whatever is
         found; problems with it are recorded in invalid_reason.
         """
+        if not self.root.is_dir():
+            # A missing mount looks like an empty store, which would retire every registered bundle
+            raise RegistryError(503, f"The model store {self.root} doesn't exist or isn't mounted; nothing was changed")
         on_disk = ModelStore(self.root).bundle_ids()
         rows = {v.bundle_id: v for v in db.scalars(select(ModelVersion))}
         report = RescanReport()

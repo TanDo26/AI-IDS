@@ -2,11 +2,15 @@
 Request / response models for /admin.
 """
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.api.db.models import ModelVersion
+from src.api.uploads.schemas import UploadOut
+
+Role = Literal["user", "admin"]
 
 
 class ModelMetrics(BaseModel):
@@ -92,3 +96,172 @@ class ActivationOut(BaseModel):
     previous: str | None
     changed: bool                                 # False if the version was already active
     notified: bool                                # processes told via Redis; otherwise they switch at their next poll
+
+
+# ── users ───────────────────────────────────────────────────
+
+class UserAdminOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    username: str
+    role: Role
+    is_active: bool
+    created_at: datetime
+    last_login_at: datetime | None
+
+
+class UserPage(BaseModel):
+    items: list[UserAdminOut]
+    total: int
+    page: int
+    size: int
+
+
+class UserUpdate(BaseModel):
+    is_active: bool | None = None
+    role: Role | None = None
+
+    @model_validator(mode="after")
+    def _something(self):
+        if self.is_active is None and self.role is None:
+            raise ValueError("Send is_active and/or role")
+        return self
+
+
+# ── usage ───────────────────────────────────────────────────
+
+class UsageRow(BaseModel):
+    user_id: int
+    email: str
+    username: str
+    role: Role
+    is_active: bool
+    uploads: int                    # in the period, deleted ones included
+    failed_uploads: int
+    deleted_uploads: int
+    bytes: int                      # uploaded
+    flows: int                      # processed
+    processing_ms: int
+    storage_bytes: int              # held right now: raw files not purged or deleted + result files
+
+
+class UsageOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: date | None = Field(alias="from")
+    to: date | None
+    users: list[UsageRow]           # every user, most bytes first
+    totals: dict[str, int]          # uploads, failed_uploads, deleted_uploads, bytes, flows, processing_ms, storage_bytes
+
+
+class DailyUsage(BaseModel):
+    day: date                       # UTC
+    uploads: int
+    bytes: int
+    flows: int
+    processing_ms: int
+
+
+class DailyUsageOut(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    user_id: int
+    from_: date = Field(alias="from")
+    to: date
+    days: list[DailyUsage]          # every day in the range, zero-filled
+
+
+# ── uploads and audit ───────────────────────────────────────
+
+class AdminUploadOut(UploadOut):
+    owner_email: str
+    owner_username: str
+    deleted_at: datetime | None
+
+
+class AdminUploadPage(BaseModel):
+    items: list[AdminUploadOut]
+    total: int
+    page: int
+    size: int
+
+
+class AuditOut(BaseModel):
+    id: int
+    actor_id: int | None            # None: a CLI script, or a deleted user
+    actor_email: str | None
+    action: str
+    target_type: str
+    target_id: str
+    details: dict
+    created_at: datetime
+
+
+class AuditPage(BaseModel):
+    items: list[AuditOut]
+    total: int
+    page: int
+    size: int
+
+
+# ── server status ───────────────────────────────────────────
+
+class GpuStats(BaseModel):
+    name: str
+    utilization_percent: float
+    memory_used_mb: int
+    memory_total_mb: int
+
+
+class SystemStats(BaseModel):
+    cpu_percent: float
+    ram_percent: float
+    ram_used_mb: int
+    ram_total_mb: int
+    disk_percent: float                     # the data volume (uploads + results)
+    disk_free_gb: float
+    disk_total_gb: float
+    disk_warning: bool                      # at or above IDS_DISK_WARNING_PERCENT
+    gpus: list[GpuStats]                    # empty without a visible NVIDIA GPU
+
+
+class Check(BaseModel):
+    ok: bool
+    error: str | None = None
+
+
+class QueueStatus(Check):
+    queued: int | None = None               # waiting in Redis
+    unacknowledged: int | None = None       # delivered to a worker, not finished (running or reserved)
+    workers: list[str] | None = None        # Celery workers that answered a ping
+
+
+class UploadStats(BaseModel):
+    by_status: dict[str, int]               # uploads not deleted
+    failed_last_24h: int
+    stuck: int                              # converting/predicting for over 35 minutes
+
+
+class ModelStatus(LoadedModel):
+    lagging_processes: int | None           # processes reporting a non-active bundle; None without Redis
+
+
+class ApiStatus(BaseModel):
+    version: str
+    process: str                            # host:pid of the API process that answered
+    started_at: datetime
+    uptime_s: int
+
+
+class ServerStatus(BaseModel):
+    checked_at: datetime
+    api: ApiStatus
+    system: SystemStats
+    database: Check
+    redis: Check
+    queue: QueueStatus
+    uploads: UploadStats | None             # None when the database is unreachable
+    model: ModelStatus
+    warnings: list[str]                     # plain-language problems, most urgent first

@@ -21,8 +21,9 @@ def gpu_stats() -> list[dict]:
         for i in range(pynvml.nvmlDeviceGetCount()):
             handle = pynvml.nvmlDeviceGetHandleByIndex(i)
             memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            name = pynvml.nvmlDeviceGetName(handle)
             gpus.append({
-                "name": pynvml.nvmlDeviceGetName(handle),
+                "name": name.decode() if isinstance(name, bytes) else name,   # bytes in older nvidia-ml-py
                 "utilization_percent": pynvml.nvmlDeviceGetUtilizationRates(handle).gpu,
                 "memory_used_mb": memory.used // 2**20,
                 "memory_total_mb": memory.total // 2**20,
@@ -43,5 +44,6 @@ def system_stats(data_dir: Path) -> dict:
         "ram_total_mb": memory.total // 2**20,
         "disk_percent": disk.percent,
         "disk_free_gb": round(disk.free / 2**30, 1),
+        "disk_total_gb": round(disk.total / 2**30, 1),
         "gpus": gpu_stats(),
     }

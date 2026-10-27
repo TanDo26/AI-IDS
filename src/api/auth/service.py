@@ -43,7 +43,9 @@ def signup(db: Session, email: str, username: str, password: str) -> User:
     if existing is not None:
         field = "email" if existing.email == email else "username"
         raise AuthError(409, f"That {field} is already registered")
-    user = User(email=email, username=username, password_hash=security.hash_password(password), role="user")
+    # Signing up signs the user in, so it counts as their first sign-in
+    user = User(email=email, username=username, password_hash=security.hash_password(password), role="user",
+                last_login_at=_now())
     db.add(user)
     db.commit()
     return user
@@ -118,14 +120,18 @@ def logout(db: Session, raw_token: str | None) -> None:
         db.commit()
 
 
+def revoke_all_sessions(db: Session, user_id: int) -> None:
+    """End every refresh-token family of a user (the caller commits)."""
+    db.execute(update(RefreshToken)
+               .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
+               .values(revoked_at=_now()))
+
+
 def change_password(db: Session, user: User, current: str, new: str,
                     user_agent: str | None = None, ip: str | None = None) -> IssuedTokens:
     if not security.verify_password(current, user.password_hash):
         raise AuthError(401, "Current password is incorrect")
     user.password_hash = security.hash_password(new)
-    # Every other session ends; this one continues with fresh tokens
-    db.execute(update(RefreshToken)
-               .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
-               .values(revoked_at=_now()))
+    revoke_all_sessions(db, user.id)   # every other session ends; this one continues with fresh tokens
     db.commit()
     return issue_tokens(db, user, user_agent=user_agent, ip=ip)

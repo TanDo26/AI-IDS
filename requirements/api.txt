@@ -8,6 +8,7 @@ xgboost==3.4.*
 shap>=0.45
 joblib>=1.3
 pyarrow>=14.0
+duckdb>=2.0,<3                  # queries over per-flow result Parquet files (2.x API: to_arrow_reader)
 pyyaml>=6.0
 
 fastapi>=0.110
@@ -21,6 +22,8 @@ psycopg[binary]>=3.1
 celery>=5.4
 redis>=5.0
 psutil>=5.9
+nvidia-ml-py>=12                # GPU stats on /admin/server when a GPU is visible
+prometheus-client>=0.20
 httpx>=0.27
 bcrypt>=4.1
 PyJWT>=2.8

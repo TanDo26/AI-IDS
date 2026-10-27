@@ -1,10 +1,12 @@
 """
-Celery application (Redis broker). Upload processing tasks are added in plan §C.3.
+Celery application (Redis broker): upload processing, plus a daily retention job run by beat.
 
     celery -A src.api.worker.celery_app:celery_app worker --concurrency 2 --loglevel INFO
+    celery -A src.api.worker.celery_app:celery_app beat --loglevel INFO
 """
 
 from celery import Celery
+from celery.schedules import crontab
 
 from src.api.settings import get_settings
 
@@ -21,4 +23,8 @@ celery_app.conf.update(
     task_track_started=True,
     broker_connection_retry_on_startup=True,
     timezone="UTC",
+    beat_schedule={
+        # Raw uploads older than IDS_RETENTION_DAYS; results and usage rows stay
+        "purge-old-uploads": {"task": "ids.purge_old_uploads", "schedule": crontab(hour=3, minute=30)},
+    },
 )

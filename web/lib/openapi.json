@@ -1,0 +1,3970 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AI-IDS",
+    "description": "Network intrusion detection: uploads, open-set predictions, explanations, admin.",
+    "version": "3.0.0"
+  },
+  "paths": {
+    "/api/v1/healthz": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Healthz",
+        "description": "Liveness: the process is up (used by the container healthcheck).",
+        "operationId": "healthz_api_v1_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/readyz": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readyz",
+        "description": "Readiness: database, Redis and an active model bundle are all available.",
+        "operationId": "readyz_api_v1_readyz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/signup": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Signup",
+        "operationId": "signup_api_v1_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh",
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change Password",
+        "operationId": "change_password_api_v1_auth_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/predict": {
+      "post": {
+        "tags": [
+          "inference"
+        ],
+        "summary": "Predict",
+        "operationId": "predict_api_v1_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/batch_predict": {
+      "post": {
+        "tags": [
+          "inference"
+        ],
+        "summary": "Batch Predict",
+        "operationId": "batch_predict_api_v1_batch_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchPredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPredictResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads": {
+      "post": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Create Upload",
+        "description": "multipart/form-data with one file in the field `file`: a CSV exported by CICFlowMeter\n(or a PCAP / PCAPNG capture when enabled). The type is read from the file's content.",
+        "operationId": "create_upload_api_v1_uploads_post",
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "List Uploads",
+        "description": "Your uploads, newest first.",
+        "operationId": "list_uploads_api_v1_uploads_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "queued",
+                    "converting",
+                    "predicting",
+                    "completed",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/stats": {
+      "get": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Upload Stats",
+        "description": "Your totals: uploads per status, bytes, flows, known attacks and unknowns found.",
+        "operationId": "upload_stats_api_v1_uploads_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadTotals"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{upload_id}": {
+      "get": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Get Upload",
+        "description": "Status, progress and error of one upload (owner or admin).",
+        "operationId": "get_upload_api_v1_uploads__upload_id__get",
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "uploads"
+        ],
+        "summary": "Delete Upload",
+        "description": "Delete the file and its results (owner or admin). The upload still counts in usage totals.",
+        "operationId": "delete_upload_api_v1_uploads__upload_id__delete",
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{upload_id}/summary": {
+      "get": {
+        "tags": [
+          "results"
+        ],
+        "summary": "Summary",
+        "description": "Decision counts, known attacks per type, unknowns per reason, and the model that produced them.",
+        "operationId": "summary_api_v1_uploads__upload_id__summary_get",
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{upload_id}/flows": {
+      "get": {
+        "tags": [
+          "results"
+        ],
+        "summary": "Flows",
+        "description": "One page of flows with their predictions, optionally filtered by decision and/or class.",
+        "operationId": "flows_api_v1_uploads__upload_id__flows_get",
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Upload Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "benign",
+                    "known_attack",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Decision"
+            }
+          },
+          {
+            "name": "class_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Class Name"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^-?(row|decision|reason|class_name|confidence|attack_score|anomaly_score|imputed_cells)$",
+              "description": "A column, '-' first for descending",
+              "default": "row",
+              "title": "Sort"
+            },
+            "description": "A column, '-' first for descending"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{upload_id}/flows/{row}/explain": {
+      "get": {
+        "tags": [
+          "results"
+        ],
+        "summary": "Explain",
+        "description": "Which features drove this flow's decision, computed with the bundle that produced it.",
+        "operationId": "explain_api_v1_uploads__upload_id__flows__row__explain_get",
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Upload Id"
+            }
+          },
+          {
+            "name": "row",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Row"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplanationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{upload_id}/export.csv": {
+      "get": {
+        "tags": [
+          "results"
+        ],
+        "summary": "Export Csv",
+        "description": "Download the results as CSV: row, metadata, Label, predictions (and optionally features).",
+        "operationId": "export_csv_api_v1_uploads__upload_id__export_csv_get",
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Upload Id"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "benign",
+                    "known_attack",
+                    "unknown"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Decision"
+            }
+          },
+          {
+            "name": "class_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Class Name"
+            }
+          },
+          {
+            "name": "features",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also include the model input features",
+              "default": false,
+              "title": "Features"
+            },
+            "description": "Also include the model input features"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/models": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Models",
+        "operationId": "list_models_api_v1_admin_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsOverview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/models/rescan": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Rescan",
+        "operationId": "rescan_api_v1_admin_models_rescan_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RescanOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/models/{version_id}/activate": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Activate",
+        "operationId": "activate_api_v1_admin_models__version_id__activate_post",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/models/rollback": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Rollback",
+        "operationId": "rollback_api_v1_admin_models_rollback_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivationOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Users",
+        "operationId": "list_users_api_v1_admin_users_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 320
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Part of an email or username",
+              "title": "Q"
+            },
+            "description": "Part of an email or username"
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "user",
+                    "admin"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}": {
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update User",
+        "description": "Deactivate/reactivate (deactivation ends the user's sessions) and promote/demote, each audited.\nNobody can change their own role or status, and the last active admin can't be removed.",
+        "operationId": "update_user_api_v1_admin_users__user_id__patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/usage": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Usage",
+        "description": "Per-user totals for uploads created in the period, plus storage held right now.",
+        "operationId": "usage_api_v1_admin_usage_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First UTC day (default: all time)",
+              "title": "From"
+            },
+            "description": "First UTC day (default: all time)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Last UTC day, included",
+              "title": "To"
+            },
+            "description": "Last UTC day, included"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/usage/{user_id}/daily": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Daily Usage",
+        "description": "One user's uploads per UTC day (default: the last 30 days, at most 366).",
+        "operationId": "daily_usage_api_v1_admin_usage__user_id__daily_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyUsageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/uploads": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "All Uploads",
+        "description": "Every user's uploads, newest first.",
+        "operationId": "all_uploads_api_v1_admin_uploads_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "queued",
+                    "converting",
+                    "predicting",
+                    "completed",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include uploads their owner deleted",
+              "default": false,
+              "title": "Deleted"
+            },
+            "description": "Include uploads their owner deleted"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUploadPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/audit": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Audit",
+        "description": "Audit log, newest first.",
+        "operationId": "audit_api_v1_admin_audit_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "e.g. model.activate, or user. for a family",
+              "title": "Action"
+            },
+            "description": "e.g. model.activate, or user. for a family"
+          },
+          {
+            "name": "actor_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor Id"
+            }
+          },
+          {
+            "name": "target_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Type"
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/server": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Server",
+        "description": "Host, database, Redis, queue, uploads and model state of the API process that answers,\nwith warnings. Takes about a second (CPU sampling and a worker ping).",
+        "operationId": "server_api_v1_admin_server_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActivationOut": {
+        "properties": {
+          "version": {
+            "$ref": "#/components/schemas/ModelVersionOut"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous"
+          },
+          "changed": {
+            "type": "boolean",
+            "title": "Changed"
+          },
+          "notified": {
+            "type": "boolean",
+            "title": "Notified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "previous",
+          "changed",
+          "notified"
+        ],
+        "title": "ActivationOut"
+      },
+      "AdminUploadOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "original_filename": {
+            "type": "string",
+            "title": "Original Filename"
+          },
+          "file_type": {
+            "type": "string",
+            "title": "File Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "converting",
+              "predicting",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "progress": {
+            "type": "integer",
+            "title": "Progress"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "n_flows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Flows"
+          },
+          "model_version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "processing_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Ms"
+          },
+          "raw_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Deleted At"
+          },
+          "owner_email": {
+            "type": "string",
+            "title": "Owner Email"
+          },
+          "owner_username": {
+            "type": "string",
+            "title": "Owner Username"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "original_filename",
+          "file_type",
+          "size_bytes",
+          "sha256",
+          "status",
+          "progress",
+          "error",
+          "n_flows",
+          "model_version_id",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "processing_ms",
+          "raw_deleted_at",
+          "owner_email",
+          "owner_username",
+          "deleted_at"
+        ],
+        "title": "AdminUploadOut"
+      },
+      "AdminUploadPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUploadOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "AdminUploadPage"
+      },
+      "ApiStatus": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "process": {
+            "type": "string",
+            "title": "Process"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "uptime_s": {
+            "type": "integer",
+            "title": "Uptime S"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "process",
+          "started_at",
+          "uptime_s"
+        ],
+        "title": "ApiStatus"
+      },
+      "AuditOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "actor_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Email"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          },
+          "target_id": {
+            "type": "string",
+            "title": "Target Id"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "actor_id",
+          "actor_email",
+          "action",
+          "target_type",
+          "target_id",
+          "details",
+          "created_at"
+        ],
+        "title": "AuditOut"
+      },
+      "AuditPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "AuditPage"
+      },
+      "BatchPredictRequest": {
+        "properties": {
+          "flows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Flows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "flows"
+        ],
+        "title": "BatchPredictRequest"
+      },
+      "BatchPredictResponse": {
+        "properties": {
+          "bundle_id": {
+            "type": "string",
+            "title": "Bundle Id"
+          },
+          "total_flows": {
+            "type": "integer",
+            "title": "Total Flows"
+          },
+          "inference_ms": {
+            "type": "number",
+            "title": "Inference Ms"
+          },
+          "predictions": {
+            "items": {
+              "$ref": "#/components/schemas/FlowPrediction"
+            },
+            "type": "array",
+            "title": "Predictions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bundle_id",
+          "total_flows",
+          "inference_ms",
+          "predictions"
+        ],
+        "title": "BatchPredictResponse"
+      },
+      "Check": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "Check"
+      },
+      "Contribution": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "contribution": {
+            "type": "number",
+            "title": "Contribution"
+          },
+          "benign_median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benign Median"
+          },
+          "deviation_sd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deviation Sd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "value",
+          "contribution"
+        ],
+        "title": "Contribution"
+      },
+      "DailyUsage": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          },
+          "uploads": {
+            "type": "integer",
+            "title": "Uploads"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          },
+          "flows": {
+            "type": "integer",
+            "title": "Flows"
+          },
+          "processing_ms": {
+            "type": "integer",
+            "title": "Processing Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "uploads",
+          "bytes",
+          "flows",
+          "processing_ms"
+        ],
+        "title": "DailyUsage"
+      },
+      "DailyUsageOut": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "title": "From"
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "title": "To"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DailyUsage"
+            },
+            "type": "array",
+            "title": "Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "from",
+          "to",
+          "days"
+        ],
+        "title": "DailyUsageOut"
+      },
+      "Explanation": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "class",
+              "anomaly"
+            ],
+            "title": "Target"
+          },
+          "class": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "benign": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benign"
+          },
+          "output_space": {
+            "type": "string",
+            "title": "Output Space"
+          },
+          "base_value": {
+            "type": "number",
+            "title": "Base Value"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/Contribution"
+            },
+            "type": "array",
+            "title": "Contributions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "output_space",
+          "base_value",
+          "contributions"
+        ],
+        "title": "Explanation"
+      },
+      "ExplanationOut": {
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Upload Id"
+          },
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "bundle_id": {
+            "type": "string",
+            "title": "Bundle Id"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "benign",
+              "known_attack",
+              "unknown"
+            ],
+            "title": "Decision"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "predicted_class": {
+            "type": "integer",
+            "title": "Predicted Class"
+          },
+          "class_name": {
+            "type": "string",
+            "title": "Class Name"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "attack_score": {
+            "type": "number",
+            "title": "Attack Score"
+          },
+          "anomaly_score": {
+            "type": "number",
+            "title": "Anomaly Score"
+          },
+          "explanations": {
+            "items": {
+              "$ref": "#/components/schemas/Explanation"
+            },
+            "type": "array",
+            "title": "Explanations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload_id",
+          "row",
+          "bundle_id",
+          "decision",
+          "reason",
+          "predicted_class",
+          "class_name",
+          "confidence",
+          "attack_score",
+          "anomaly_score",
+          "explanations"
+        ],
+        "title": "ExplanationOut"
+      },
+      "FlowOut": {
+        "properties": {
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Metadata"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "benign",
+              "known_attack",
+              "unknown"
+            ],
+            "title": "Decision"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "predicted_class": {
+            "type": "integer",
+            "title": "Predicted Class"
+          },
+          "class_name": {
+            "type": "string",
+            "title": "Class Name"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "attack_score": {
+            "type": "number",
+            "title": "Attack Score"
+          },
+          "anomaly_score": {
+            "type": "number",
+            "title": "Anomaly Score"
+          },
+          "imputed_cells": {
+            "type": "integer",
+            "title": "Imputed Cells"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "metadata",
+          "label",
+          "decision",
+          "reason",
+          "predicted_class",
+          "class_name",
+          "confidence",
+          "attack_score",
+          "anomaly_score",
+          "imputed_cells"
+        ],
+        "title": "FlowOut"
+      },
+      "FlowPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FlowOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "FlowPage"
+      },
+      "FlowPrediction": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "predicted_class": {
+            "type": "integer",
+            "title": "Predicted Class"
+          },
+          "class_name": {
+            "type": "string",
+            "title": "Class Name"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "attack_score": {
+            "type": "number",
+            "title": "Attack Score"
+          },
+          "anomaly_score": {
+            "type": "number",
+            "title": "Anomaly Score"
+          },
+          "imputed_cells": {
+            "type": "integer",
+            "title": "Imputed Cells"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "reason",
+          "predicted_class",
+          "class_name",
+          "confidence",
+          "attack_score",
+          "anomaly_score",
+          "imputed_cells"
+        ],
+        "title": "FlowPrediction"
+      },
+      "GpuStats": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "utilization_percent": {
+            "type": "number",
+            "title": "Utilization Percent"
+          },
+          "memory_used_mb": {
+            "type": "integer",
+            "title": "Memory Used Mb"
+          },
+          "memory_total_mb": {
+            "type": "integer",
+            "title": "Memory Total Mb"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "utilization_percent",
+          "memory_used_mb",
+          "memory_total_mb"
+        ],
+        "title": "GpuStats"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LoadedModel": {
+        "properties": {
+          "loaded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded"
+          },
+          "loaded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded At"
+          },
+          "active_in_store": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active In Store"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loaded",
+          "loaded_at",
+          "active_in_store",
+          "last_error"
+        ],
+        "title": "LoadedModel"
+      },
+      "LoginRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "ModelMetrics": {
+        "properties": {
+          "macro_f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Macro F1"
+          },
+          "attack_recall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attack Recall"
+          },
+          "benign_fpr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benign Fpr"
+          },
+          "benign_as_unknown": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benign As Unknown"
+          },
+          "attack_as_unknown": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attack As Unknown"
+          },
+          "attack_missed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attack Missed"
+          },
+          "latency_p50_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency P50 Ms"
+          },
+          "latency_p95_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency P95 Ms"
+          },
+          "batch_flows_per_second": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Flows Per Second"
+          }
+        },
+        "type": "object",
+        "title": "ModelMetrics",
+        "description": "From the bundle's manifest: its test split at build time. None where the bundle has no value."
+      },
+      "ModelRef": {
+        "properties": {
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Id"
+          },
+          "experiment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id",
+          "bundle_id",
+          "experiment",
+          "model"
+        ],
+        "title": "ModelRef"
+      },
+      "ModelStatus": {
+        "properties": {
+          "loaded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded"
+          },
+          "loaded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded At"
+          },
+          "active_in_store": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active In Store"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "lagging_processes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lagging Processes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loaded",
+          "loaded_at",
+          "active_in_store",
+          "last_error",
+          "lagging_processes"
+        ],
+        "title": "ModelStatus"
+      },
+      "ModelVersionOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "bundle_id": {
+            "type": "string",
+            "title": "Bundle Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "invalid_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invalid Reason"
+          },
+          "registered_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Registered At"
+          },
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          },
+          "activated_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated By"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "classes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Classes"
+          },
+          "n_features": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Features"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/ModelMetrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "bundle_id",
+          "status",
+          "invalid_reason",
+          "registered_at",
+          "activated_at",
+          "activated_by",
+          "source",
+          "classes",
+          "n_features",
+          "metrics"
+        ],
+        "title": "ModelVersionOut"
+      },
+      "ModelsOverview": {
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ModelVersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "this_process": {
+            "$ref": "#/components/schemas/LoadedModel"
+          },
+          "processes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProcessModel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "active",
+          "versions",
+          "this_process",
+          "processes"
+        ],
+        "title": "ModelsOverview"
+      },
+      "PasswordChangeRequest": {
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "maxLength": 1024,
+            "title": "Current Password"
+          },
+          "new_password": {
+            "type": "string",
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChangeRequest"
+      },
+      "PredictRequest": {
+        "properties": {
+          "features": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "features"
+        ],
+        "title": "PredictRequest"
+      },
+      "PredictResponse": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "predicted_class": {
+            "type": "integer",
+            "title": "Predicted Class"
+          },
+          "class_name": {
+            "type": "string",
+            "title": "Class Name"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "attack_score": {
+            "type": "number",
+            "title": "Attack Score"
+          },
+          "anomaly_score": {
+            "type": "number",
+            "title": "Anomaly Score"
+          },
+          "imputed_cells": {
+            "type": "integer",
+            "title": "Imputed Cells"
+          },
+          "bundle_id": {
+            "type": "string",
+            "title": "Bundle Id"
+          },
+          "inference_ms": {
+            "type": "number",
+            "title": "Inference Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision",
+          "reason",
+          "predicted_class",
+          "class_name",
+          "confidence",
+          "attack_score",
+          "anomaly_score",
+          "imputed_cells",
+          "bundle_id",
+          "inference_ms"
+        ],
+        "title": "PredictResponse"
+      },
+      "ProcessModel": {
+        "properties": {
+          "loaded": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded"
+          },
+          "loaded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded At"
+          },
+          "active_in_store": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active In Store"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "process": {
+            "type": "string",
+            "title": "Process"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "reported_at": {
+            "type": "string",
+            "title": "Reported At"
+          },
+          "lagging": {
+            "type": "boolean",
+            "title": "Lagging"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loaded",
+          "loaded_at",
+          "active_in_store",
+          "last_error",
+          "process",
+          "kind",
+          "reported_at",
+          "lagging"
+        ],
+        "title": "ProcessModel"
+      },
+      "QueueStatus": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "queued": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queued"
+          },
+          "unacknowledged": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unacknowledged"
+          },
+          "workers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "title": "QueueStatus"
+      },
+      "RescanOut": {
+        "properties": {
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Added"
+          },
+          "verified": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Verified"
+          },
+          "invalid": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Invalid"
+          },
+          "retired": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Retired"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ModelVersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "added",
+          "verified",
+          "invalid",
+          "retired",
+          "versions"
+        ],
+        "title": "RescanOut"
+      },
+      "ServerStatus": {
+        "properties": {
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Checked At"
+          },
+          "api": {
+            "$ref": "#/components/schemas/ApiStatus"
+          },
+          "system": {
+            "$ref": "#/components/schemas/SystemStats"
+          },
+          "database": {
+            "$ref": "#/components/schemas/Check"
+          },
+          "redis": {
+            "$ref": "#/components/schemas/Check"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueStatus"
+          },
+          "uploads": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UploadStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelStatus"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked_at",
+          "api",
+          "system",
+          "database",
+          "redis",
+          "queue",
+          "uploads",
+          "model",
+          "warnings"
+        ],
+        "title": "ServerStatus"
+      },
+      "SignupRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "title": "Email"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "username",
+          "password"
+        ],
+        "title": "SignupRequest"
+      },
+      "SummaryOut": {
+        "properties": {
+          "upload_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Upload Id"
+          },
+          "n_flows": {
+            "type": "integer",
+            "title": "N Flows"
+          },
+          "n_benign": {
+            "type": "integer",
+            "title": "N Benign"
+          },
+          "n_known_attack": {
+            "type": "integer",
+            "title": "N Known Attack"
+          },
+          "n_unknown": {
+            "type": "integer",
+            "title": "N Unknown"
+          },
+          "attack_breakdown": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Attack Breakdown"
+          },
+          "unknown_breakdown": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Unknown Breakdown"
+          },
+          "label_agreement": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Agreement"
+          },
+          "inference_ms": {
+            "type": "number",
+            "title": "Inference Ms"
+          },
+          "processing_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Ms"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelRef"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload_id",
+          "n_flows",
+          "n_benign",
+          "n_known_attack",
+          "n_unknown",
+          "attack_breakdown",
+          "unknown_breakdown",
+          "label_agreement",
+          "inference_ms",
+          "processing_ms",
+          "model"
+        ],
+        "title": "SummaryOut"
+      },
+      "SystemStats": {
+        "properties": {
+          "cpu_percent": {
+            "type": "number",
+            "title": "Cpu Percent"
+          },
+          "ram_percent": {
+            "type": "number",
+            "title": "Ram Percent"
+          },
+          "ram_used_mb": {
+            "type": "integer",
+            "title": "Ram Used Mb"
+          },
+          "ram_total_mb": {
+            "type": "integer",
+            "title": "Ram Total Mb"
+          },
+          "disk_percent": {
+            "type": "number",
+            "title": "Disk Percent"
+          },
+          "disk_free_gb": {
+            "type": "number",
+            "title": "Disk Free Gb"
+          },
+          "disk_total_gb": {
+            "type": "number",
+            "title": "Disk Total Gb"
+          },
+          "disk_warning": {
+            "type": "boolean",
+            "title": "Disk Warning"
+          },
+          "gpus": {
+            "items": {
+              "$ref": "#/components/schemas/GpuStats"
+            },
+            "type": "array",
+            "title": "Gpus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cpu_percent",
+          "ram_percent",
+          "ram_used_mb",
+          "ram_total_mb",
+          "disk_percent",
+          "disk_free_gb",
+          "disk_total_gb",
+          "disk_warning",
+          "gpus"
+        ],
+        "title": "SystemStats"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "expires_in",
+          "user"
+        ],
+        "title": "TokenResponse",
+        "description": "The access token is also set as an httpOnly cookie; scripts use it as a Bearer token."
+      },
+      "UploadOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "original_filename": {
+            "type": "string",
+            "title": "Original Filename"
+          },
+          "file_type": {
+            "type": "string",
+            "title": "File Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "converting",
+              "predicting",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "progress": {
+            "type": "integer",
+            "title": "Progress"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "n_flows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Flows"
+          },
+          "model_version_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "processing_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processing Ms"
+          },
+          "raw_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "original_filename",
+          "file_type",
+          "size_bytes",
+          "sha256",
+          "status",
+          "progress",
+          "error",
+          "n_flows",
+          "model_version_id",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "processing_ms",
+          "raw_deleted_at"
+        ],
+        "title": "UploadOut"
+      },
+      "UploadPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UploadOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "UploadPage"
+      },
+      "UploadStats": {
+        "properties": {
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Status"
+          },
+          "failed_last_24h": {
+            "type": "integer",
+            "title": "Failed Last 24H"
+          },
+          "stuck": {
+            "type": "integer",
+            "title": "Stuck"
+          }
+        },
+        "type": "object",
+        "required": [
+          "by_status",
+          "failed_last_24h",
+          "stuck"
+        ],
+        "title": "UploadStats"
+      },
+      "UploadTotals": {
+        "properties": {
+          "uploads": {
+            "type": "integer",
+            "title": "Uploads"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "By Status"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          },
+          "flows": {
+            "type": "integer",
+            "title": "Flows"
+          },
+          "known_attacks": {
+            "type": "integer",
+            "title": "Known Attacks"
+          },
+          "unknown": {
+            "type": "integer",
+            "title": "Unknown"
+          },
+          "last_upload_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Upload At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uploads",
+          "by_status",
+          "bytes",
+          "flows",
+          "known_attacks",
+          "unknown",
+          "last_upload_at"
+        ],
+        "title": "UploadTotals",
+        "description": "The signed-in user's totals over the uploads they still have."
+      },
+      "UsageOut": {
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/UsageRow"
+            },
+            "type": "array",
+            "title": "Users"
+          },
+          "totals": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Totals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "users",
+          "totals"
+        ],
+        "title": "UsageOut"
+      },
+      "UsageRow": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "title": "Role"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "uploads": {
+            "type": "integer",
+            "title": "Uploads"
+          },
+          "failed_uploads": {
+            "type": "integer",
+            "title": "Failed Uploads"
+          },
+          "deleted_uploads": {
+            "type": "integer",
+            "title": "Deleted Uploads"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          },
+          "flows": {
+            "type": "integer",
+            "title": "Flows"
+          },
+          "processing_ms": {
+            "type": "integer",
+            "title": "Processing Ms"
+          },
+          "storage_bytes": {
+            "type": "integer",
+            "title": "Storage Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "username",
+          "role",
+          "is_active",
+          "uploads",
+          "failed_uploads",
+          "deleted_uploads",
+          "bytes",
+          "flows",
+          "processing_ms",
+          "storage_bytes"
+        ],
+        "title": "UsageRow"
+      },
+      "UserAdminOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "title": "Role"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "username",
+          "role",
+          "is_active",
+          "created_at",
+          "last_login_at"
+        ],
+        "title": "UserAdminOut"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "username",
+          "role",
+          "is_active",
+          "created_at",
+          "last_login_at"
+        ],
+        "title": "UserOut"
+      },
+      "UserPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserAdminOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "size"
+        ],
+        "title": "UserPage"
+      },
+      "UserUpdate": {
+        "properties": {
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "admin"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

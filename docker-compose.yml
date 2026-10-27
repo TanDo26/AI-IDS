@@ -1,5 +1,3 @@
-version: "3.8"
-
 x-app: &app
   build:
     context: .
@@ -18,16 +16,24 @@ x-app: &app
     IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-false}
     IDS_MODEL_POLL_SECONDS: ${IDS_MODEL_POLL_SECONDS:-30}
     IDS_COOKIE_SECURE: ${IDS_COOKIE_SECURE:-true}
+    IDS_DISK_WARNING_PERCENT: ${IDS_DISK_WARNING_PERCENT:-85}
+    # The api runs 2 uvicorn workers: /metrics sums their HTTP metrics through this directory
+    PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
   volumes:
     - ./model_store:/app/model_store:ro    # bundles are built on the training machine
     - appdata:/data                        # uploads/ and results/
+  tmpfs:
+    # Empty at every (re)start, so no stale worker files. mode=1777: Docker mounts tmpfs as
+    # root 0755 by default, and the services run as the non-root user `ids`
+    - /tmp/prometheus:mode=1777
 
 services:
   # ── pipeline ─────────────────────────────────────────────
+  # No container_name: prepare/train/... extend this service, and a fixed name made Compose
+  # refuse the whole profile ("container name already in use")
   ids:
     profiles: [pipeline]
     build: .
-    container_name: ai-ids
     volumes:
       - .:/app
       - ./dataset:/app/dataset
@@ -142,6 +148,29 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Schedules the daily retention job (exactly one beat per deployment)
+  beat:
+    <<: *app
+    command: ["celery", "-A", "src.api.worker.celery_app:celery_app", "beat", "--loglevel", "INFO",
+              "--schedule", "/tmp/celerybeat-schedule"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Next.js frontend (web/); Caddy sends every non-/api path here
+  web:
+    build:
+      context: ./web
+    image: ai-ids-web
+    profiles: [app]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
   proxy:
     image: caddy:2-alpine
     profiles: [app]
@@ -153,7 +182,27 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      web:
+        condition: service_healthy
     restart: unless-stopped
+
+  # Browser smoke test (web/e2e/) of the running app stack; see README "Browser smoke test":
+  #   docker compose --profile app run --rm e2e
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.64.0-noble   # same version as @playwright/test
+    profiles: [e2e]
+    # Caddy's network namespace: the browser opens http://localhost, where Secure cookies are kept
+    network_mode: "service:proxy"
+    working_dir: /app
+    volumes:
+      - ./web:/app
+      - e2e-node-modules:/app/node_modules   # Linux (glibc) packages, apart from the host's
+      - e2e-npm-cache:/root/.npm
+    environment:
+      E2E_ADMIN_EMAIL: ${E2E_ADMIN_EMAIL:-}
+      E2E_ADMIN_PASSWORD: ${E2E_ADMIN_PASSWORD:-}
+      E2E_FLOWS_CSV: ${E2E_FLOWS_CSV:-e2e/data/flows.csv}
+    command: ["sh", "-c", "npm ci --no-audit --no-fund --loglevel=error && npx playwright test"]
 
   # ── test ─────────────────────────────────────────────────
   # Throwaway Postgres + Redis for pytest; data lives in tmpfs, ports only on 127.0.0.1
@@ -189,3 +238,5 @@ volumes:
   redisdata:
   appdata:
   caddydata:
+  e2e-node-modules:
+  e2e-npm-cache:

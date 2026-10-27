@@ -222,8 +222,11 @@ AI-IDS/
 │   ├── build_bundle.py              # CLI: package an experiment as a server model bundle
 │   ├── manage_models.py             # CLI: list / activate / roll back model bundles
 │   ├── evaluate_open_set.py         # CLI: unseen-attack evaluation (temporal, leave-one-family-out)
-│   └── create_admin.py              # CLI: first admin account for the web API
+│   ├── create_admin.py              # CLI: first admin account for the web API
+│   └── make_sample_upload.py        # CLI: real test-split flows as an upload CSV (demos, smoke test)
 ├── tests/                           # pytest suite for the web API + inference (tiny synthetic bundle)
+├── web/                             # Next.js frontend (served by Caddy next to the API)
+│   └── e2e/                         # Playwright browser smoke test of the running stack
 ├── models/                          # Saved trained models (.pkl / .pt)
 ├── results/
 │   ├── metrics/                     # CSV summary tables
@@ -243,6 +246,8 @@ AI-IDS/
 - **Python 3.11+** (or Docker)
 - **PyTorch with CUDA** (for GPU-accelerated MLP/LSTM training)
 - CIC-IDS2017 parquet files placed in `dataset/CIC-IDS2017/`
+- **Docker Desktop** to run the web application (API, worker, database, frontend): see [Web frontend](#web-frontend-web)
+- **Node.js 24 LTS** (npm included) only to develop the frontend with hot reload; running the app needs Docker alone
 
 ### Option 1: Run with Docker (Recommended)
 
@@ -408,6 +413,17 @@ alembic upgrade head
 uvicorn src.api.main:app --port 8000
 ```
 
+**On Windows:**
+- **Git Bash path rewriting:** Git Bash rewrites `/app/...` arguments of `docker compose exec` into Windows paths. Run `export MSYS_NO_PATHCONV=1` first, or leave out `--store` (it defaults to `/app/model_store`).
+- **Large uploads to `localhost:8080`:** Docker Desktop's port forwarding can stall on very large uploads that the server rejects early, especially when RAM is short. Users reach the stack through the tunnel instead, and Caddy rejects anything announced over 100 MB before it reaches the API.
+
+**Upload processing.** Each upload is queued for the Celery `worker`:
+- it predicts the flows in batches of 50,000;
+- it writes per-flow results to `data/results/<upload_id>/flows.parquet` and a summary: decision counts, known-attack breakdown, and agreement with an uploaded `Label` column (attack vs benign);
+- `GET /uploads/{id}` shows the status (`queued` → `predicting` → `completed` / `failed`), the progress and any error.
+
+The `beat` service deletes raw uploads older than `IDS_RETENTION_DAYS` (30) every night at 03:30 UTC; results and usage records stay.
+
 **Model switching.** The server's active bundle is recorded in its database, in the `model_versions` table.
 `manage_models.py` without `--db` only edits `model_store/registry.json`, which is for offline use on the
 training machine.
@@ -426,18 +442,153 @@ training machine.
 | `GET` | `/auth/me` | Current user |
 | `POST` | `/predict` | One flow → `benign` / `known_attack` / `unknown`, attack type, scores (login required) |
 | `POST` | `/batch_predict` | Up to 10,000 flows (login required) |
-| `POST` | `/uploads` | Upload a CICFlowMeter CSV as multipart field `file` (≤ 100 MB). The type is read from the content, and missing features are listed at once. PCAP / PCAPNG only with `IDS_ENABLE_PCAP=true`. |
+| `POST` | `/uploads` | Upload a CICFlowMeter CSV as multipart field `file` (≤ 100 MB) and queue it for processing. The type is read from the content, and missing features are listed at once. PCAP / PCAPNG only with `IDS_ENABLE_PCAP=true`. |
 | `GET` | `/uploads`, `/uploads/{id}` | Your uploads (newest first, `page` / `size` / `status`), or one upload's status and progress |
+| `GET` | `/uploads/stats` | Your totals over the uploads you still have: per status, bytes, flows, known attacks, unknowns |
 | `DELETE` | `/uploads/{id}` | Delete the file and its results (owner or admin); it still counts in usage totals |
+| `GET` | `/uploads/{id}/summary` | Decision counts, known attacks per type, unknowns per reason, label agreement, the model that produced them |
+| `GET` | `/uploads/{id}/flows` | Paginated flows (`page`, `size` ≤ 500), filtered by `decision` / `class_name`, sorted by `sort` (e.g. `-anomaly_score`) |
+| `GET` | `/uploads/{id}/flows/{row}/explain` | SHAP explanation of one flow, computed with the bundle that produced it |
+| `GET` | `/uploads/{id}/export.csv` | Download the results as CSV (`decision`, `class_name`, `features=true` to include the model inputs) |
 | `GET` | `/admin/models` | Admin: versions with metrics, the active one, what each process has loaded |
 | `POST` | `/admin/models/rescan` | Admin: register / re-check the bundles in `model_store/` |
 | `POST` | `/admin/models/{id}/activate`, `/admin/models/rollback` | Admin: switch the served model |
+| `GET` / `PATCH` | `/admin/users`, `/admin/users/{id}` | Admin: search users; deactivate/reactivate, promote/demote (audited; not yourself, never the last admin) |
+| `GET` | `/admin/usage`, `/admin/usage/{user_id}/daily` | Admin: per-user uploads, bytes, flows, processing time, storage (`from` / `to`); one user's daily series |
+| `GET` | `/admin/uploads`, `/admin/audit` | Admin: every user's uploads (`user_id`, `status`, `deleted`); the audit log (`action`, `actor_id`, `target_type`, `target_id`) |
+| `GET` | `/admin/server` | Admin: CPU/RAM/disk/GPU, database, Redis, Celery queue and workers, upload counts, model state, plain-language warnings |
+| `GET` | `/metrics` | Prometheus metrics, outside `/api` so Caddy never exposes it (scrape `api:8000` inside the Compose network) |
 
 Create the first admin with `python scripts/create_admin.py --email you@example.com --username admin`
 (in Docker: `docker compose exec api python scripts/create_admin.py ...`). Scripts call `/predict` with
 the `access_token` from `/auth/login` as `Authorization: Bearer <token>`.
 
 Settings are `IDS_*` environment variables (see `.env.example`).
+
+### Web frontend (`web/`)
+
+[Next.js](https://nextjs.org/) 16 (App Router, TypeScript, Tailwind CSS). Caddy serves it on the same origin as the API: pages at `http://localhost:8080/`, the API under `/api/`. To use the app you only need Docker (step 3). Node.js is needed to change the frontend with hot reload (steps 1 and 2).
+
+#### 1. Install Node.js and npm
+
+npm ships with Node.js: installing Node.js installs npm too. Use the **24 LTS** line.
+
+```powershell
+# Windows, any one of:
+winget install OpenJS.NodeJS.LTS                # Windows Package Manager
+#   or the installer from https://nodejs.org (LTS), with "npm package manager" left ticked
+#   or nvm-windows, to switch versions later:  nvm install 24  then  nvm use 24
+
+# Linux / macOS (nvm):
+#   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
+#   nvm install 24
+```
+
+Open a **new** terminal, then check:
+
+```powershell
+node --version        # v24.x
+npm --version
+```
+
+If PowerShell says *running scripts is disabled on this system* for `npm`, allow local scripts once with
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or call `npm.cmd` instead of `npm`.
+
+Install the frontend's packages, at the exact versions in `package-lock.json`:
+
+```powershell
+cd web
+npm ci                # use `npm install <package>` only to add or upgrade a package
+```
+
+#### 2. Develop with hot reload
+
+The dev server needs the API running. Start the stack (step 3), then:
+
+```powershell
+cd web
+npm run dev           # http://localhost:3000; /api/* is forwarded to the stack on http://localhost:8080
+npm test              # unit tests: API client, session rules
+npm run typecheck     # TypeScript
+```
+
+To use an API on another address, e.g. uvicorn on the host: `$env:IDS_API_ORIGIN="http://localhost:8000"; npm run dev`
+(PowerShell) or `IDS_API_ORIGIN=http://localhost:8000 npm run dev` (bash).
+
+After changing an API endpoint or response model, regenerate the frontend's types:
+
+```powershell
+python scripts/export_openapi.py      # -> web/lib/openapi.json
+cd web; npm run gen:api               # -> web/lib/api-schema.d.ts
+```
+
+#### 3. Run the frontend with Docker
+
+The `app` profile runs the frontend together with the rest of the stack:
+
+| Service | Role |
+|---|---|
+| `web` | Next.js |
+| `api` | FastAPI |
+| `worker`, `beat` | Celery |
+| `postgres`, `redis` | Database and broker |
+| `migrate` | One-shot schema upgrade |
+| `proxy` | Caddy on port 8080 |
+
+```powershell
+# One-time setup
+copy .env.example .env                              # then set IDS_SECRET_KEY and POSTGRES_PASSWORD
+
+# Build the images and start everything (first build takes a few minutes)
+docker compose --profile app up -d --build
+docker compose --profile app ps                     # wait for api and web to show (healthy)
+
+# First admin account (prompts for the password) and the served model
+docker compose exec api python scripts/create_admin.py --email you@example.com --username admin
+python scripts/build_bundle.py --exp EXP-59         # on the host, once: package a trained model into model_store/
+docker compose exec api python scripts/manage_models.py --db rescan
+docker compose exec api python scripts/manage_models.py --db activate <bundle_id>
+```
+
+Open **http://localhost:8080** and sign in. New users create an account at `/signup` (they get the `user` role).
+For a file to try, `python scripts/make_sample_upload.py --out sample.csv` writes 2,524 real flows of the test split (every attack type, with a `Label` column).
+
+| Page | What it shows |
+|---|---|
+| `/dashboard` | Your totals (uploads, flows analysed, known attacks, unknowns, data uploaded), a quick upload area and the recent uploads |
+| `/uploads/new` | Drag and drop a CICFlowMeter CSV (≤ 100 MB, checked before sending) with transfer progress. A CSV missing features the active model needs is refused with the list. After sending, you land on the upload's results page |
+| `/uploads` | Your uploads with live status while they're analysed; filter by status; delete. The file name opens its results |
+| `/uploads/[id]` | Live progress while it's analysed, then the results: benign / unknown / known-attack counts (unknowns split into low confidence and anomalous), known attacks per type, the model used and the agreement with the file's `Label`, and every flow in a table you can filter by decision or class, sort and page through. Clicking a count or a bar filters the table. Download the flows as CSV, optionally with the model's input features. Click a flow to open its explanation: the reason in one line, and the 15 features that pushed the decision most, as bars toward or away from the class (red toward an attack, blue toward benign). An unknown flow shows the two classes the model hesitated between, or how far each unusual feature is from normal traffic |
+| `/account` | Profile and password change |
+| `/admin` (admins) | Server status, refreshed every 5 s: problems in plain words, API / database / Redis / workers, CPU, memory and disk, the job queue and uploads by status, and which model this process serves |
+| `/admin/models` (admins) | Every registered bundle side by side (macro-F1, attack recall, false alarms, unknown rates, latency, throughput; the best of each in bold), Rescan `model_store/`, Activate or Roll back after a confirmation, and the version each API and worker process has loaded |
+| `/admin/users` (admins) | Search by email or username, filter by role and status; make or remove admins, deactivate (signs the user out everywhere) or reactivate, each after a confirmation. Links to each user's usage and history |
+| `/admin/usage` (admins) | For the last 7 / 30 / 90 days or all time: totals, a sortable per-user table (uploads, failed, deleted, data, flows, processing time, storage held now), and one user's activity per day (per week for all time) as a chart or a table |
+| `/admin/audit` (admins) | Every admin change and model switch, newest first, in plain words; filter by action, or follow a person or a target to see only theirs |
+
+| Task | Command |
+|---|---|
+| Rebuild only the frontend after changing `web/` | `docker compose --profile app up -d --build web` |
+| Follow the frontend's logs | `docker compose logs -f web` |
+| Stop, keeping data | `docker compose --profile app down` |
+| Stop and delete the database, uploads and results | `docker compose --profile app down -v` |
+
+Without Node.js installed, npm commands run in a container too. The volume `ai-ids-web-node-modules` keeps the packages between runs:
+
+```powershell
+# PowerShell
+docker run --rm -v "${PWD}/web:/app" -v ai-ids-web-node-modules:/app/node_modules -w /app node:24-alpine sh -c "npm ci && npm test && npm run typecheck"
+```
+
+```bash
+# Git Bash (keep it from rewriting /app into a Windows path)
+export MSYS_NO_PATHCONV=1
+docker run --rm -v "$(pwd -W)/web:/app" -v ai-ids-web-node-modules:/app/node_modules -w /app node:24-alpine sh -c "npm ci && npm test && npm run typecheck"
+```
+
+**Notes:**
+- **Session cookies** are `Secure`, so browsers keep them over HTTPS and on `http://localhost` only. For plain-http access from another machine, set `IDS_COOKIE_SECURE=false`; the sign-in page says so if the cookies were refused.
+- **If `http://localhost:8080` stops answering while the containers are healthy**, Docker Desktop's port forwarding is stuck (this happened when the PC ran out of RAM). Restarting Docker Desktop fixes it.
 
 ### Tests
 
@@ -455,6 +606,27 @@ docker compose --profile test down
 ```
 
 The tests empty every table, so `IDS_TEST_DATABASE_URL` must name a database containing `test`.
+
+The frontend's unit tests run with `npm test` (see [Web frontend](#web-frontend-web)).
+
+**Browser smoke test** (`web/e2e/`, Playwright). It drives Chromium through Caddy against the running `app` stack:
+- a new user follows a link to a page, is sent to sign in, signs up instead and lands on that page; they upload real flows and read the summary, the flows table, an explanation and the CSV export;
+- an admin checks the server and switches the model. The user's next upload is analysed by the new model, while the first upload still explains with its own. The admin rolls back, finds both changes in the audit log, and finds the user and their usage;
+- every page fits a phone screen; no console errors or failed requests along the way; signing out ends the session.
+
+It needs an active model, an admin account and the sample flows. It leaves its user and uploads behind, so run it against a development stack. With only one usable bundle in `model_store/`, the model switch is skipped.
+
+```bash
+python scripts/make_sample_upload.py                       # once: -> web/e2e/data/flows.csv
+docker compose exec api python scripts/create_admin.py --email e2e-admin@example.test --username e2e_admin
+
+export E2E_ADMIN_EMAIL=e2e-admin@example.test
+read -rsp "Admin password: " E2E_ADMIN_PASSWORD && export E2E_ADMIN_PASSWORD
+docker compose --profile app run --rm e2e                  # about 30 s, plus a minute for the first npm install
+```
+
+In PowerShell, set `$env:E2E_ADMIN_EMAIL` and `$env:E2E_ADMIN_PASSWORD` instead. On failure, `web/test-results/` holds a trace and a screenshot and `web/playwright-report/index.html` the report.
+Sign-up allows 3 accounts an hour per address, so a fourth run within the hour stops at sign-up.
 
 ## Configuration
 

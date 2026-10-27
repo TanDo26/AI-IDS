@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from src.api.db.models import AuditLog, Upload, User
+from src.api.db.models import AuditLog, PredictionSummary, Upload, User
 from src.api.settings import Settings
 from src.api.uploads.validation import HEAD_BYTES, UploadRejected, detect_file_type
 from src.inference.engine import InferenceEngine
@@ -113,6 +113,20 @@ def list_uploads(db: Session, user_id: int, page: int, size: int, status: str | 
     items = db.scalars(query.order_by(Upload.created_at.desc(), Upload.id)
                        .offset((page - 1) * size).limit(size)).all()
     return list(items), total
+
+
+def upload_stats(db: Session, user_id: int) -> dict:
+    """One user's totals over the uploads they still have (deleted ones are gone from their view)."""
+    live = (Upload.user_id == user_id, Upload.deleted_at.is_(None))
+    by_status = dict(db.execute(select(Upload.status, func.count()).where(*live).group_by(Upload.status)).all())
+    size, flows, last = db.execute(select(func.coalesce(func.sum(Upload.size_bytes), 0),
+                                          func.coalesce(func.sum(Upload.n_flows), 0),
+                                          func.max(Upload.created_at)).where(*live)).one()
+    known, unknown = db.execute(select(func.coalesce(func.sum(PredictionSummary.n_known_attack), 0),
+                                       func.coalesce(func.sum(PredictionSummary.n_unknown), 0))
+                                .join(Upload, PredictionSummary.upload_id == Upload.id).where(*live)).one()
+    return {"uploads": sum(by_status.values()), "by_status": by_status, "bytes": int(size), "flows": int(flows),
+            "known_attacks": int(known), "unknown": int(unknown), "last_upload_at": last}
 
 
 def get_upload(db: Session, upload_id: uuid.UUID, user: User) -> Upload:

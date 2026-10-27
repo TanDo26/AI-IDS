@@ -19,6 +19,7 @@ class FlowExplainer:
         self.top_n = top_n
         self.features = list(bundle.manifest["required_features"])
         self.class_names = bundle.manifest["class_names"]
+        self.benign_class = int(bundle.manifest["benign_class"])
         self.benign_profile = bundle.manifest.get("benign_profile", {})
 
         classifier = bundle.classifier
@@ -79,6 +80,7 @@ class FlowExplainer:
             "target": "class",
             "class": cls,
             "class_name": self.class_names[str(cls)],
+            "benign": cls == self.benign_class,   # so a client can tell evidence of benign from evidence of attack
             "output_space": "log_odds" if self._model_type == "XGBClassifier" else "probability",
             "base_value": float(base[k] if len(base) > 1 else base[0]),
             "contributions": self._top(contributions, raw),
