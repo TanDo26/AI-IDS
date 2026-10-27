@@ -23,11 +23,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return <div className="p-8 text-sm text-slate-500">Loading…</div>;
   }
   if (me.isError) {
+    // 403: an admin deactivated the account. Asking again won't help; signing out clears the session.
+    const refused = me.error instanceof ApiError && me.error.status === 403;
     return (
       <div className="mx-auto max-w-md p-8">
-        <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{me.error.message}</p>
-        <button onClick={() => me.refetch()} className="text-sm font-medium text-brand-700 hover:underline">
-          Try again
+        <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {me.error.message}{refused && ". Ask an administrator to reactivate it."}
+        </p>
+        <button onClick={refused ? logout : () => me.refetch()} className="text-sm font-medium text-brand-700 hover:underline">
+          {refused ? "Sign out" : "Try again"}
         </button>
       </div>
     );
