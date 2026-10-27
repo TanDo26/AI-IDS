@@ -31,12 +31,13 @@ export function DashboardView() {
     <div className="space-y-8">
       <h1 className="text-2xl font-semibold">Welcome, {me.data?.username}</h1>
       {noModel && <Alert tone="info">No model is active yet, so uploads can&apos;t be analysed. Ask an admin to activate one.</Alert>}
+      {(recent.isError || stats.isError) && <Alert>{(recent.error ?? stats.error)?.message}</Alert>}
 
       <section aria-label="Your totals" className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {cards.map((c) => (
           <div key={c.label} className="rounded-xl border border-slate-200 bg-white p-4" title={c.hint}>
             <p className="text-xs uppercase tracking-wide text-slate-500">{c.label}</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{s ? c.value : "…"}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">{s ? c.value : stats.isError ? "—" : "…"}</p>
           </div>
         ))}
       </section>
@@ -52,7 +53,9 @@ export function DashboardView() {
           <Link href="/uploads" className="text-sm font-medium text-brand-700 hover:underline">View all</Link>
         </div>
         {recent.data ? <UploadsTable uploads={recent.data.items} compact />
-                     : <p className="px-4 py-8 text-center text-sm text-slate-500">Loading…</p>}
+                     : <p className="px-4 py-8 text-center text-sm text-slate-500">
+                         {recent.isError ? "Your uploads couldn't be loaded." : "Loading…"}
+                       </p>}
       </section>
     </div>
   );

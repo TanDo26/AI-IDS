@@ -59,7 +59,17 @@ export function errorMessage(body: unknown, status: number): string {
       .join("; ");
   }
   if (detail && typeof detail === "object" && "message" in detail) return String(detail.message);
+  // 502/503/504 without a body come from the proxy: the API is down or restarting
+  if ([502, 503, 504].includes(status)) return "The server isn't answering right now; please try again in a moment.";
   return status >= 500 ? "The server had a problem; please try again." : `Request failed (${status})`;
+}
+
+/** No answer at all (offline, DNS, the proxy is down): fetch() rejected. Retried like a 5xx. */
+export class NetworkError extends Error {
+  constructor() {
+    super("Can't reach the server. Check your connection and try again.");
+    this.name = "NetworkError";
+  }
 }
 
 export function defaultSessionExpired() {
@@ -92,7 +102,8 @@ function send(path: string, method: string, options: RequestOptions): Promise<Re
     const token = readCookie(CSRF_COOKIE);
     if (token) headers[CSRF_HEADER] = token;
   }
-  return fetch(`${API_BASE}${path}`, { method, headers, body, credentials: "same-origin", signal: options.signal });
+  return fetch(`${API_BASE}${path}`, { method, headers, body, credentials: "same-origin", signal: options.signal })
+    .catch((e) => { throw e instanceof DOMException && e.name === "AbortError" ? e : new NetworkError(); });
 }
 
 let refreshing: Promise<boolean> | null = null;

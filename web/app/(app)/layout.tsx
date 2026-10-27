@@ -22,13 +22,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // Loading, or the session is over and the API client is already on its way to /login
     return <div className="p-8 text-sm text-slate-500">Loading…</div>;
   }
-  if (me.isError) {
-    // 403: an admin deactivated the account. Asking again won't help; signing out clears the session.
-    const refused = me.error instanceof ApiError && me.error.status === 403;
+  // 403: an admin deactivated the account. Asking again won't help; signing out clears the session.
+  const refused = me.error instanceof ApiError && me.error.status === 403;
+  const user = me.data;
+  // Any other error only takes over before the user is known: a failed background check (e.g. the
+  // API restarting) keeps the page, whose own requests say what failed
+  if (!user || refused) {
     return (
       <div className="mx-auto max-w-md p-8">
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {me.error.message}{refused && ". Ask an administrator to reactivate it."}
+          {me.error?.message}{refused && ". Ask an administrator to reactivate it."}
         </p>
         <button onClick={refused ? logout : () => me.refetch()} className="text-sm font-medium text-brand-700 hover:underline">
           {refused ? "Sign out" : "Try again"}
@@ -37,7 +40,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const user = me.data;
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">

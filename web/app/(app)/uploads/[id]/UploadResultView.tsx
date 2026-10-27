@@ -20,9 +20,10 @@ export function UploadResultView({ id }: { id: string }) {
   const upload = useUpload(id);
 
   if (upload.isPending) return <p className="text-sm text-slate-500">Loading…</p>;
-  if (upload.isError) {
-    // 422: not an upload id at all; 404: someone else's, deleted, or never existed
-    const gone = upload.error instanceof ApiError && [404, 422].includes(upload.error.status);
+  // 422: not an upload id at all; 404: someone else's, deleted, or never existed
+  const gone = upload.error instanceof ApiError && [404, 422].includes(upload.error.status);
+  // Any other failed poll (e.g. the API restarting) keeps what is known: polling goes on and catches up
+  if (upload.isError && (gone || !upload.data)) {
     return (
       <div className="max-w-xl space-y-4">
         <Alert>{gone ? "This upload doesn't exist or has been deleted." : upload.error.message}</Alert>
@@ -35,6 +36,9 @@ export function UploadResultView({ id }: { id: string }) {
   return (
     <div className="space-y-6">
       <Header upload={u} />
+      {upload.isError && isActive(u.status) && (
+        <Alert tone="info">Lost contact with the server. This page keeps checking and updates once it answers.</Alert>
+      )}
       {isActive(u.status) && <Progress upload={u} />}
       {u.status === "failed" && <Alert>The analysis failed: {u.error ?? "unknown error"}</Alert>}
       {u.status === "completed" && <Results id={id} />}
