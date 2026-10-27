@@ -44,6 +44,7 @@ def test_signup_logs_the_new_user_in(client, db):
     body = r.json()
     assert body["user"]["email"] == "bob@example.com"
     assert body["user"]["role"] == "user"
+    assert body["user"]["last_login_at"] is not None          # signing up is the first sign-in
     assert body["token_type"] == "bearer" and body["access_token"]
     assert all(client.cookies.get(name) for name in SESSION_COOKIES)
     assert client.get(f"{API}/auth/me").json()["username"] == "bob"

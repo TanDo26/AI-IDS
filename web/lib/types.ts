@@ -36,10 +36,14 @@ export type Activation = Schemas["ActivationOut"];
 export type ServerStatus = Schemas["ServerStatus"];
 export type AdminUser = Schemas["UserAdminOut"];
 export type UserPage = Schemas["UserPage"];
+export type UserUpdate = Schemas["UserUpdate"];
 export type Usage = Schemas["UsageOut"];
+export type UsageRow = Schemas["UsageRow"];
 export type DailyUsage = Schemas["DailyUsageOut"];
+export type UsageDay = Schemas["DailyUsage"];         // one UTC day of DailyUsage
 export type AdminUploadPage = Schemas["AdminUploadPage"];
 export type AuditPage = Schemas["AuditPage"];
+export type AuditEntry = Schemas["AuditOut"];
 
 // /readyz (not a declared response model)
 export interface Readiness {

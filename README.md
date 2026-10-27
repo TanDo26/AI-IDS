@@ -559,6 +559,9 @@ Open **http://localhost:8080** and sign in. New users create an account at `/sig
 | `/account` | Profile and password change |
 | `/admin` (admins) | Server status, refreshed every 5 s: problems in plain words, API / database / Redis / workers, CPU, memory and disk, the job queue and uploads by status, and which model this process serves |
 | `/admin/models` (admins) | Every registered bundle side by side (macro-F1, attack recall, false alarms, unknown rates, latency, throughput; the best of each in bold), Rescan `model_store/`, Activate or Roll back after a confirmation, and the version each API and worker process has loaded |
+| `/admin/users` (admins) | Search by email or username, filter by role and status; make or remove admins, deactivate (signs the user out everywhere) or reactivate, each after a confirmation. Links to each user's usage and history |
+| `/admin/usage` (admins) | For the last 7 / 30 / 90 days or all time: totals, a sortable per-user table (uploads, failed, deleted, data, flows, processing time, storage held now), and one user's activity per day (per week for all time) as a chart or a table |
+| `/admin/audit` (admins) | Every admin change and model switch, newest first, in plain words; filter by action, or follow a person or a target to see only theirs |
 
 | Task | Command |
 |---|---|

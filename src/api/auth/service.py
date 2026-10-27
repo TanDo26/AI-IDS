@@ -43,7 +43,9 @@ def signup(db: Session, email: str, username: str, password: str) -> User:
     if existing is not None:
         field = "email" if existing.email == email else "username"
         raise AuthError(409, f"That {field} is already registered")
-    user = User(email=email, username=username, password_hash=security.hash_password(password), role="user")
+    # Signing up signs the user in, so it counts as their first sign-in
+    user = User(email=email, username=username, password_hash=security.hash_password(password), role="user",
+                last_login_at=_now())
     db.add(user)
     db.commit()
     return user
