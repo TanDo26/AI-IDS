@@ -557,6 +557,8 @@ Open **http://localhost:8080** and sign in. New users create an account at `/sig
 | `/uploads` | Your uploads with live status while they're analysed; filter by status; delete. The file name opens its results |
 | `/uploads/[id]` | Live progress while it's analysed, then the results: benign / unknown / known-attack counts (unknowns split into low confidence and anomalous), known attacks per type, the model used and the agreement with the file's `Label`, and every flow in a table you can filter by decision or class, sort and page through. Clicking a count or a bar filters the table. Download the flows as CSV, optionally with the model's input features. Click a flow to open its explanation: the reason in one line, and the 15 features that pushed the decision most, as bars toward or away from the class (red toward an attack, blue toward benign). An unknown flow shows the two classes the model hesitated between, or how far each unusual feature is from normal traffic |
 | `/account` | Profile and password change |
+| `/admin` (admins) | Server status, refreshed every 5 s: problems in plain words, API / database / Redis / workers, CPU, memory and disk, the job queue and uploads by status, and which model this process serves |
+| `/admin/models` (admins) | Every registered bundle side by side (macro-F1, attack recall, false alarms, unknown rates, latency, throughput; the best of each in bold), Rescan `model_store/`, Activate or Roll back after a confirmation, and the version each API and worker process has loaded |
 
 | Task | Command |
 |---|---|
