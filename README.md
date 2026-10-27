@@ -222,9 +222,11 @@ AI-IDS/
 │   ├── build_bundle.py              # CLI: package an experiment as a server model bundle
 │   ├── manage_models.py             # CLI: list / activate / roll back model bundles
 │   ├── evaluate_open_set.py         # CLI: unseen-attack evaluation (temporal, leave-one-family-out)
-│   └── create_admin.py              # CLI: first admin account for the web API
+│   ├── create_admin.py              # CLI: first admin account for the web API
+│   └── make_sample_upload.py        # CLI: real test-split flows as an upload CSV (demos, smoke test)
 ├── tests/                           # pytest suite for the web API + inference (tiny synthetic bundle)
 ├── web/                             # Next.js frontend (served by Caddy next to the API)
+│   └── e2e/                         # Playwright browser smoke test of the running stack
 ├── models/                          # Saved trained models (.pkl / .pt)
 ├── results/
 │   ├── metrics/                     # CSV summary tables
@@ -549,6 +551,7 @@ docker compose exec api python scripts/manage_models.py --db activate <bundle_id
 ```
 
 Open **http://localhost:8080** and sign in. New users create an account at `/signup` (they get the `user` role).
+For a file to try, `python scripts/make_sample_upload.py --out sample.csv` writes 2,524 real flows of the test split (every attack type, with a `Label` column).
 
 | Page | What it shows |
 |---|---|
@@ -603,6 +606,27 @@ docker compose --profile test down
 ```
 
 The tests empty every table, so `IDS_TEST_DATABASE_URL` must name a database containing `test`.
+
+The frontend's unit tests run with `npm test` (see [Web frontend](#web-frontend-web)).
+
+**Browser smoke test** (`web/e2e/`, Playwright). It drives Chromium through Caddy against the running `app` stack:
+- a new user follows a link to a page, is sent to sign in, signs up instead and lands on that page; they upload real flows and read the summary, the flows table, an explanation and the CSV export;
+- an admin checks the server and switches the model. The user's next upload is analysed by the new model, while the first upload still explains with its own. The admin rolls back, finds both changes in the audit log, and finds the user and their usage;
+- every page fits a phone screen; no console errors or failed requests along the way; signing out ends the session.
+
+It needs an active model, an admin account and the sample flows. It leaves its user and uploads behind, so run it against a development stack. With only one usable bundle in `model_store/`, the model switch is skipped.
+
+```bash
+python scripts/make_sample_upload.py                       # once: -> web/e2e/data/flows.csv
+docker compose exec api python scripts/create_admin.py --email e2e-admin@example.test --username e2e_admin
+
+export E2E_ADMIN_EMAIL=e2e-admin@example.test
+read -rsp "Admin password: " E2E_ADMIN_PASSWORD && export E2E_ADMIN_PASSWORD
+docker compose --profile app run --rm e2e                  # about 30 s, plus a minute for the first npm install
+```
+
+In PowerShell, set `$env:E2E_ADMIN_EMAIL` and `$env:E2E_ADMIN_PASSWORD` instead. On failure, `web/test-results/` holds a trace and a screenshot and `web/playwright-report/index.html` the report.
+Sign-up allows 3 accounts an hour per address, so a fourth run within the hour stops at sign-up.
 
 ## Configuration
 

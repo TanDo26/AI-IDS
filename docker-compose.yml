@@ -186,6 +186,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Browser smoke test (web/e2e/) of the running app stack; see README "Browser smoke test":
+  #   docker compose --profile app run --rm e2e
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.64.0-noble   # same version as @playwright/test
+    profiles: [e2e]
+    # Caddy's network namespace: the browser opens http://localhost, where Secure cookies are kept
+    network_mode: "service:proxy"
+    working_dir: /app
+    volumes:
+      - ./web:/app
+      - e2e-node-modules:/app/node_modules   # Linux (glibc) packages, apart from the host's
+      - e2e-npm-cache:/root/.npm
+    environment:
+      E2E_ADMIN_EMAIL: ${E2E_ADMIN_EMAIL:-}
+      E2E_ADMIN_PASSWORD: ${E2E_ADMIN_PASSWORD:-}
+      E2E_FLOWS_CSV: ${E2E_FLOWS_CSV:-e2e/data/flows.csv}
+    command: ["sh", "-c", "npm ci --no-audit --no-fund --loglevel=error && npx playwright test"]
+
   # ── test ─────────────────────────────────────────────────
   # Throwaway Postgres + Redis for pytest; data lives in tmpfs, ports only on 127.0.0.1
   # (use 127.0.0.1, not localhost: on Windows localhost tries IPv6 first, ~2 s per connection):
@@ -220,3 +238,5 @@ volumes:
   redisdata:
   appdata:
   caddydata:
+  e2e-node-modules:
+  e2e-npm-cache:

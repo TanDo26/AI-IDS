@@ -78,4 +78,7 @@ docker-compose.override.yml
 /web/node_modules/
 /web/.next/
 /web/next-env.d.ts
+/web/e2e/data/
+/web/playwright-report/
+/web/test-results/
 *.tsbuildinfo
