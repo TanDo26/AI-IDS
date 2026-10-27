@@ -38,6 +38,11 @@ os.environ.update({
     "IDS_MODEL_EVENTS_ENABLED": "false",
 })
 
+# Before any other import: celery_app reads the settings when it is imported
+from src.api.settings import Settings, get_settings  # noqa: E402
+
+Settings.model_config["env_file"] = None       # a developer's .env must not reach the tests
+
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.engine import make_url  # noqa: E402
@@ -46,14 +51,12 @@ from src.api.auth import security  # noqa: E402
 from src.api.db.models import Base, ModelVersion, User  # noqa: E402
 from src.api.db.session import get_engine, get_sessionmaker  # noqa: E402
 from src.api.runtime.model_registry import ModelRegistry  # noqa: E402
-from src.api.settings import Settings, get_settings  # noqa: E402
 from src.inference.bundle import load_bundle  # noqa: E402
 from src.inference.store import ModelStore  # noqa: E402
 from src.api.worker import tasks  # noqa: E402
 from tests.helpers import PASSWORD  # noqa: E402
 from tests.tiny_bundle import build_tiny_bundle  # noqa: E402
 
-Settings.model_config["env_file"] = None       # a developer's .env must not reach the tests
 security.BCRYPT_ROUNDS = 4                     # cost 12 makes every signup/login ~0.25 s
 
 TINY_A, TINY_B = "tiny-a", "tiny-b"

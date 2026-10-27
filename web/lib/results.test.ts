@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { exportPath, flowsPath, nextSort, percent } from "@/lib/results";
+import { captureFacts, exportPath, flowsPath, nextSort, percent } from "@/lib/results";
+
+describe("capture facts", () => {
+  it("says what was read, and what was left out only when something was", () => {
+    const clean = { packets: 11763, ipv4: 11763, flows: 1688, short_flows: 0, skipped: {}, extract_ms: 420 };
+    expect(captureFacts(clean)).toEqual([
+      ["Flows extracted", "1,688 from 11,763 packets", expect.any(String)],
+      ["Flow extraction", "420 ms"],
+    ]);
+    const facts = captureFacts({ ...clean, short_flows: 25, skipped: { ipv6: 8, not_ip: 10 } });
+    expect(facts.map(([term, value]) => [term, value])).toEqual([
+      ["Flows extracted", "1,688 from 11,763 packets"],
+      ["Single-packet flows", "25 left out"],
+      ["Packets not used", "18"],
+      ["Flow extraction", "420 ms"],
+    ]);
+    expect(facts[2][2]).toMatch(/^8 IPv6, 10 not IP\. Only IPv4/);
+  });
+});
 
 describe("paths", () => {
   it("builds the flows query, leaving out unset filters", () => {

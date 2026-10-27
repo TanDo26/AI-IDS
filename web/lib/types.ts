@@ -19,6 +19,7 @@ export type UploadPage = Schemas["UploadPage"];
 export type UploadStatus = Upload["status"];
 export type UploadTotals = Schemas["UploadTotals"];
 export type Summary = Schemas["SummaryOut"];
+export type CaptureStats = Schemas["CaptureStats"];   // what the flow extractor read from a pcap / pcapng
 export type Flow = Schemas["FlowOut"];
 export type FlowPage = Schemas["FlowPage"];
 export type Decision = Flow["decision"];

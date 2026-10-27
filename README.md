@@ -211,6 +211,7 @@ AI-IDS/
 │   │   ├── evaluate.py              # Evaluation orchestration
 │   │   └── plots.py                 # Confusion matrix + PR curve plots
 │   ├── inference/                   # Model bundles, open-set decision, explanations, model store
+│   ├── flowmeter/                   # pcap / pcapng -> CICFlowMeter flows (port of the reference tool)
 │   └── api/                         # FastAPI web API (main.py), DB models, Celery worker
 ├── scripts/
 │   ├── prepare_data.py              # CLI: load → clean → split
@@ -223,7 +224,9 @@ AI-IDS/
 │   ├── manage_models.py             # CLI: list / activate / roll back model bundles
 │   ├── evaluate_open_set.py         # CLI: unseen-attack evaluation (temporal, leave-one-family-out)
 │   ├── create_admin.py              # CLI: first admin account for the web API
-│   └── make_sample_upload.py        # CLI: real test-split flows as an upload CSV (demos, smoke test)
+│   ├── make_sample_upload.py        # CLI: real test-split flows as an upload CSV (demos, smoke test)
+│   ├── make_test_capture.py         # CLI: synthetic pcap for the flow extractor (parity, benchmark)
+│   └── validate_flowmeter.py        # CLI: compare src/flowmeter with the Java CICFlowMeter
 ├── tests/                           # pytest suite for the web API + inference (tiny synthetic bundle)
 ├── web/                             # Next.js frontend (served by Caddy next to the API)
 │   └── e2e/                         # Playwright browser smoke test of the running stack
@@ -418,9 +421,10 @@ uvicorn src.api.main:app --port 8000
 - **Large uploads to `localhost:8080`:** Docker Desktop's port forwarding can stall on very large uploads that the server rejects early, especially when RAM is short. Users reach the stack through the tunnel instead, and Caddy rejects anything announced over 100 MB before it reaches the API.
 
 **Upload processing.** Each upload is queued for the Celery `worker`:
+- a pcap / pcapng capture is first turned into flows by the [flow extractor](#flow-extractor-srcflowmeter) (status `converting`);
 - it predicts the flows in batches of 50,000;
-- it writes per-flow results to `data/results/<upload_id>/flows.parquet` and a summary: decision counts, known-attack breakdown, and agreement with an uploaded `Label` column (attack vs benign);
-- `GET /uploads/{id}` shows the status (`queued` → `predicting` → `completed` / `failed`), the progress and any error.
+- it writes per-flow results to `data/results/<upload_id>/flows.parquet` and a summary: decision counts, known-attack breakdown, agreement with an uploaded `Label` column (attack vs benign), and for a capture what was read from it;
+- `GET /uploads/{id}` shows the status (`queued` → `converting` for captures → `predicting` → `completed` / `failed`), the progress and any error.
 
 The `beat` service deletes raw uploads older than `IDS_RETENTION_DAYS` (30) every night at 03:30 UTC; results and usage records stay.
 
@@ -442,11 +446,11 @@ training machine.
 | `GET` | `/auth/me` | Current user |
 | `POST` | `/predict` | One flow → `benign` / `known_attack` / `unknown`, attack type, scores (login required) |
 | `POST` | `/batch_predict` | Up to 10,000 flows (login required) |
-| `POST` | `/uploads` | Upload a CICFlowMeter CSV as multipart field `file` (≤ 100 MB) and queue it for processing. The type is read from the content, and missing features are listed at once. PCAP / PCAPNG only with `IDS_ENABLE_PCAP=true`. |
+| `POST` | `/uploads` | Upload a CICFlowMeter CSV or a pcap / pcapng capture as multipart field `file` (≤ 100 MB) and queue it for processing. The type is read from the content; a CSV's missing features are listed at once. `IDS_ENABLE_PCAP=false` turns captures off. |
 | `GET` | `/uploads`, `/uploads/{id}` | Your uploads (newest first, `page` / `size` / `status`), or one upload's status and progress |
 | `GET` | `/uploads/stats` | Your totals over the uploads you still have: per status, bytes, flows, known attacks, unknowns |
 | `DELETE` | `/uploads/{id}` | Delete the file and its results (owner or admin); it still counts in usage totals |
-| `GET` | `/uploads/{id}/summary` | Decision counts, known attacks per type, unknowns per reason, label agreement, the model that produced them |
+| `GET` | `/uploads/{id}/summary` | Decision counts, known attacks per type, unknowns per reason, label agreement, the model that produced them; for a capture, packets read, flows extracted and what was left out |
 | `GET` | `/uploads/{id}/flows` | Paginated flows (`page`, `size` ≤ 500), filtered by `decision` / `class_name`, sorted by `sort` (e.g. `-anomaly_score`) |
 | `GET` | `/uploads/{id}/flows/{row}/explain` | SHAP explanation of one flow, computed with the bundle that produced it |
 | `GET` | `/uploads/{id}/export.csv` | Download the results as CSV (`decision`, `class_name`, `features=true` to include the model inputs) |
@@ -464,6 +468,46 @@ Create the first admin with `python scripts/create_admin.py --email you@example.
 the `access_token` from `/auth/login` as `Authorization: Bearer <token>`.
 
 Settings are `IDS_*` environment variables (see `.env.example`).
+
+### Flow extractor (`src/flowmeter/`)
+
+Turns a packet capture into the flows the models were trained on. It is a Python port of the corrected CICFlowMeter by Engelen et al. ([GintsEngelen/CICFlowMeter](https://github.com/GintsEngelen/CICFlowMeter)) at commit `13a0615`, the version that produced the CIC-IDS2017 training data. It writes the same 82 features under the training names, keeps the tool's quirks, and needs only the standard library (pandas for the output).
+
+```bash
+python -m src.flowmeter capture.pcap -o flows.csv          # or flows.parquet; prints packets, flows and time
+python -m src.flowmeter capture.pcapng --min-packets 1     # keep single-packet flows too, as the Java tool does
+```
+
+- **Input:** pcap (µs or ns) and pcapng, with Ethernet (VLAN tags too), Linux cooked (SLL, SLL2), raw IP or loopback frames.
+- **IPv4 only,** like the reference's command-line tool. IPv6, ARP and damaged frames are skipped and counted.
+- **Single-packet flows are left out** by default: the training data has none.
+- **Flows ending:** after 120 s, after a FIN both ways and the last ACK, or after an RST, as in the reference. Flows past the timeout leave memory during the capture, so memory stays bounded; the output is the same as keeping them.
+- **Where it differs from the Java tool,** all on frames that tool misreads:
+  - it reads some ARP frames as IPv4, which yields a flow between `8.6.0.1` and `8.0.6.4`;
+  - it counts the padding of short frames behind a VLAN tag as payload;
+  - it reads every capture as Ethernet.
+
+**Parity with the Java tool.** `docker/cicflowmeter.Dockerfile` builds the reference at `13a0615` (Java 8, jnetpcap). It reads classic pcap with Ethernet frames. `scripts/validate_flowmeter.py` matches the flows of both tools on Flow ID + start time and compares every feature. It passes at ≥ 99% of flows matched and ≥ 99.9% of values within 1e-6.
+
+```bash
+docker build -f docker/cicflowmeter.Dockerfile -t ai-ids-cicflowmeter docker
+python scripts/make_test_capture.py --packets 60000 --out captures/test.pcap      # or any capture of your own
+docker run --rm -v "$PWD/captures:/data" ai-ids-cicflowmeter /data/test.pcap /data/   # Git Bash: MSYS_NO_PATHCONV=1
+python scripts/validate_flowmeter.py --pcap captures/test.pcap --reference captures/test.pcap_Flow.csv     --bundle model_store/<bundle_id>                       # optional: also compare the predictions
+```
+
+Checked so far:
+
+| Capture | Packets | Flows matched | Values within 1e-6 |
+|---|---:|---:|---:|
+| Synthetic, 5 seeds (timeouts, teardowns, scans, ICMP, fragments, truncated frames) | 10k–60k each | 100% | 100% |
+| Synthetic, 100 MB | 252,484 | 38,094 / 38,094 | 100% |
+| Synthetic, 100 MB of short frames | 1,167,133 | 162,497 / 162,497 | 100% |
+| Real traffic between containers (HTTP, downloads, nmap, hping3, iperf3, a connection > 120 s) | 11,763 | 1,688 / 1,689 (the ARP flow) | 100% |
+
+On the real capture, the EXP-59 bundle gave the same decision for 100% of the matched flows from either tool. Differences in the last digits are the Java tool's: Java 8 prints some doubles with one digit too few.
+
+**Speed:** 40,000–45,000 packets/s on one core, so a 100 MB capture takes 6–30 s depending on packet size: 6.5 s for the 252,484 packets above, 25.8 s for the 1.17 million short frames. The target was under 60 s.
 
 ### Web frontend (`web/`)
 
@@ -610,14 +654,15 @@ The tests empty every table, so `IDS_TEST_DATABASE_URL` must name a database con
 The frontend's unit tests run with `npm test` (see [Web frontend](#web-frontend-web)).
 
 **Browser smoke test** (`web/e2e/`, Playwright). It drives Chromium through Caddy against the running `app` stack:
-- a new user follows a link to a page, is sent to sign in, signs up instead and lands on that page; they upload real flows and read the summary, the flows table, an explanation and the CSV export;
+- a new user follows a link to a page, is sent to sign in, signs up instead and lands on that page; they upload real flows and read the summary, the flows table, an explanation and the CSV export; then they upload a packet capture, which is turned into flows and analysed;
 - an admin checks the server and switches the model. The user's next upload is analysed by the new model, while the first upload still explains with its own. The admin rolls back, finds both changes in the audit log, and finds the user and their usage;
 - every page fits a phone screen; no console errors or failed requests along the way; signing out ends the session.
 
-It needs an active model, an admin account and the sample flows. It leaves its user and uploads behind, so run it against a development stack. With only one usable bundle in `model_store/`, the model switch is skipped.
+It needs an active model, an admin account, the sample flows and a sample capture. It leaves its user and uploads behind, so run it against a development stack. With only one usable bundle in `model_store/`, the model switch is skipped.
 
 ```bash
 python scripts/make_sample_upload.py                       # once: -> web/e2e/data/flows.csv
+python scripts/make_test_capture.py --packets 3000 --out web/e2e/data/capture.pcap   # once
 docker compose exec api python scripts/create_admin.py --email e2e-admin@example.test --username e2e_admin
 
 export E2E_ADMIN_EMAIL=e2e-admin@example.test

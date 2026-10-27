@@ -10,7 +10,7 @@ const STYLES: Record<Upload["status"], string> = {
 
 const LABELS: Record<Upload["status"], string> = {
   queued: "Queued",
-  converting: "Converting",
+  converting: "Extracting flows",
   predicting: "Analysing",
   completed: "Completed",
   failed: "Failed",

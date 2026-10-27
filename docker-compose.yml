@@ -13,7 +13,7 @@ x-app: &app
     IDS_DATA_DIR: /data
     IDS_MAX_UPLOAD_MB: ${IDS_MAX_UPLOAD_MB:-100}
     IDS_RETENTION_DAYS: ${IDS_RETENTION_DAYS:-30}
-    IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-false}
+    IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-true}
     IDS_MODEL_POLL_SECONDS: ${IDS_MODEL_POLL_SECONDS:-30}
     IDS_COOKIE_SECURE: ${IDS_COOKIE_SECURE:-true}
     IDS_DISK_WARNING_PERCENT: ${IDS_DISK_WARNING_PERCENT:-85}
@@ -202,6 +202,7 @@ services:
       E2E_ADMIN_EMAIL: ${E2E_ADMIN_EMAIL:-}
       E2E_ADMIN_PASSWORD: ${E2E_ADMIN_PASSWORD:-}
       E2E_FLOWS_CSV: ${E2E_FLOWS_CSV:-e2e/data/flows.csv}
+      E2E_CAPTURE: ${E2E_CAPTURE:-e2e/data/capture.pcap}
     command: ["sh", "-c", "npm ci --no-audit --no-fund --loglevel=error && npx playwright test"]
 
   # ── test ─────────────────────────────────────────────────

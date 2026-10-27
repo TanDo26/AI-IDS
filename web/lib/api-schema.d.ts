@@ -195,8 +195,8 @@ export interface paths {
         put?: never;
         /**
          * Create Upload
-         * @description multipart/form-data with one file in the field `file`: a CSV exported by CICFlowMeter
-         *     (or a PCAP / PCAPNG capture when enabled). The type is read from the file's content.
+         * @description multipart/form-data with one file in the field `file`: a CSV exported by CICFlowMeter, or a
+         *     pcap / pcapng capture (unless IDS_ENABLE_PCAP=false). The type is read from the file's content.
          */
         post: operations["create_upload_api_v1_uploads_post"];
         delete?: never;
@@ -678,6 +678,26 @@ export interface components {
             /** Predictions */
             predictions: components["schemas"]["FlowPrediction"][];
         };
+        /**
+         * CaptureStats
+         * @description What the flow extractor read from an uploaded capture.
+         */
+        CaptureStats: {
+            /** Packets */
+            packets: number;
+            /** Ipv4 */
+            ipv4: number;
+            /** Flows */
+            flows: number;
+            /** Short Flows */
+            short_flows: number;
+            /** Skipped */
+            skipped: {
+                [key: string]: number;
+            };
+            /** Extract Ms */
+            extract_ms: number;
+        };
         /** Check */
         Check: {
             /** Ok */
@@ -1100,6 +1120,7 @@ export interface components {
             inference_ms: number;
             /** Processing Ms */
             processing_ms: number | null;
+            capture: components["schemas"]["CaptureStats"] | null;
             model: components["schemas"]["ModelRef"];
         };
         /** SystemStats */

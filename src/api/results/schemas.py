@@ -17,6 +17,16 @@ class ModelRef(BaseModel):
     model: str | None
 
 
+class CaptureStats(BaseModel):
+    """What the flow extractor read from an uploaded capture."""
+    packets: int                            # packets in the file
+    ipv4: int                               # IPv4 packets, the only ones that form flows
+    flows: int                              # flows analysed
+    short_flows: int                        # single-packet flows left out (the training data has none)
+    skipped: dict[str, int]                 # packets not used, per reason: ipv6 | not_ip | malformed | unsupported_link
+    extract_ms: float
+
+
 class SummaryOut(BaseModel):
     upload_id: uuid.UUID
     n_flows: int
@@ -28,6 +38,7 @@ class SummaryOut(BaseModel):
     label_agreement: float | None           # attack-vs-benign agreement with the uploaded Label column
     inference_ms: float
     processing_ms: int | None
+    capture: CaptureStats | None            # pcap / pcapng uploads only
     model: ModelRef
 
 

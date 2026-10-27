@@ -313,7 +313,7 @@
           "uploads"
         ],
         "summary": "Create Upload",
-        "description": "multipart/form-data with one file in the field `file`: a CSV exported by CICFlowMeter\n(or a PCAP / PCAPNG capture when enabled). The type is read from the file's content.",
+        "description": "multipart/form-data with one file in the field `file`: a CSV exported by CICFlowMeter, or a\npcap / pcapng capture (unless IDS_ENABLE_PCAP=false). The type is read from the file's content.",
         "operationId": "create_upload_api_v1_uploads_post",
         "responses": {
           "201": {
@@ -1904,6 +1904,48 @@
         ],
         "title": "BatchPredictResponse"
       },
+      "CaptureStats": {
+        "properties": {
+          "packets": {
+            "type": "integer",
+            "title": "Packets"
+          },
+          "ipv4": {
+            "type": "integer",
+            "title": "Ipv4"
+          },
+          "flows": {
+            "type": "integer",
+            "title": "Flows"
+          },
+          "short_flows": {
+            "type": "integer",
+            "title": "Short Flows"
+          },
+          "skipped": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Skipped"
+          },
+          "extract_ms": {
+            "type": "number",
+            "title": "Extract Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "packets",
+          "ipv4",
+          "flows",
+          "short_flows",
+          "skipped",
+          "extract_ms"
+        ],
+        "title": "CaptureStats",
+        "description": "What the flow extractor read from an uploaded capture."
+      },
       "Check": {
         "properties": {
           "ok": {
@@ -3267,6 +3309,16 @@
             ],
             "title": "Processing Ms"
           },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "model": {
             "$ref": "#/components/schemas/ModelRef"
           }
@@ -3283,6 +3335,7 @@
           "label_agreement",
           "inference_ms",
           "processing_ms",
+          "capture",
           "model"
         ],
         "title": "SummaryOut"

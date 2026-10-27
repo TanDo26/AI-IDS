@@ -1,12 +1,14 @@
 // End-to-end smoke test of a running stack, through Caddy: a new user signs up, uploads real
-// flows, reads the results and an explanation; an admin switches the model, the user's next
-// upload uses it, the first upload still explains with its own model, and the admin rolls back.
+// flows, reads the results and an explanation, and uploads a packet capture; an admin switches the
+// model, the user's next upload uses it, the first upload still explains with its own model, and
+// the admin rolls back.
 // See README "Browser smoke test" for how to run it; it leaves its user and uploads behind.
 import { readFileSync } from "node:fs";
 
 import { type APIResponse, type Page, expect, test } from "@playwright/test";
 
 const CSV = process.env.E2E_FLOWS_CSV ?? "e2e/data/flows.csv";
+const CAPTURE = process.env.E2E_CAPTURE ?? "e2e/data/capture.pcap";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "";
 const UPLOAD_URL = /\/uploads\/[0-9a-f-]{36}$/;
@@ -34,9 +36,9 @@ async function json(response: Pick<APIResponse, "ok" | "url" | "status" | "json"
   return response.json();
 }
 
-/** On /uploads/new: upload the sample file and wait for its results; returns the upload id. */
-async function uploadAndWait(page: Page): Promise<string> {
-  await page.getByLabel("Choose a file to upload").setInputFiles(CSV);
+/** On /uploads/new: upload a file (the sample flows by default) and wait for its results; returns the upload id. */
+async function uploadAndWait(page: Page, file = CSV): Promise<string> {
+  await page.getByLabel("Choose a file to upload").setInputFiles(file);
   await page.waitForURL(UPLOAD_URL, { timeout: 60_000 });
   await expect(page.getByRole("heading", { name: "Known attacks by type" })).toBeVisible({ timeout: ANALYSIS_MS });
   return page.url().split("/").pop()!;
@@ -120,6 +122,16 @@ test("a user's upload, its results and a model switch, end to end", async ({ bro
     await expect(listed).toContainText("Completed");
   });
 
+  await test.step("a packet capture is turned into flows and analysed", async () => {
+    await user.goto("/uploads/new");
+    const upload = await uploadAndWait(user, CAPTURE);
+    const summary = await json(await user.request.get(`/api/v1/uploads/${upload}/summary`));
+    expect(summary.capture.flows).toBe(summary.n_flows);
+    expect(summary.n_benign + summary.n_unknown + summary.n_known_attack).toBe(summary.n_flows);
+    const n = (value: number) => value.toLocaleString("en-US");
+    await expect(user.getByText(`${n(summary.n_flows)} from ${n(summary.capture.packets)} packets`)).toBeVisible();
+  });
+
   let second = "";
   await test.step("an admin sees the server ready and switches the model", async () => {
     await admin.goto("/login");
@@ -183,7 +195,7 @@ test("a user's upload, its results and a model switch, end to end", async ({ bro
     await expect(listed).toHaveCount(1);
     await listed.getByRole("link", { name: "Usage" }).click();
     const row = admin.getByRole("region", { name: "Per user" }).getByRole("row").filter({ hasText: username });
-    await expect(row.locator("td").nth(1)).toHaveText(second ? "2" : "1");
+    await expect(row.locator("td").nth(1)).toHaveText(second ? "3" : "2");
     await expect(admin.getByRole("region", { name: "Daily activity" })).toContainText(username);
   });
 

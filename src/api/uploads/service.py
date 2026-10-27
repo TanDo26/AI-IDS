@@ -78,8 +78,8 @@ def save_upload(db: Session, settings: Settings, user: User, src, filename: str 
     head = src.read(HEAD_BYTES)
     file_type, columns = detect_file_type(head, complete=len(head) < HEAD_BYTES)
     if file_type != "csv" and not settings.enable_pcap:
-        raise UploadRejected(415, "PCAP uploads are not enabled yet (the flow extractor is still being "
-                                  "validated); upload a CSV exported by CICFlowMeter instead")
+        raise UploadRejected(415, "PCAP uploads are turned off on this server; "
+                                  "upload a CSV exported by CICFlowMeter instead")
     if columns is not None:
         missing = engine.missing_features(columns)
         if missing:  # caught now rather than after queueing; the worker checks again

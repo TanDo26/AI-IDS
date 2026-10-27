@@ -73,7 +73,7 @@ export function UploadDropzone({ onUploaded, disabled = false }:
         ) : (
           <>
             <p className="text-sm text-slate-700">
-              Drop a CICFlowMeter CSV here, or{" "}
+              Drop a CICFlowMeter CSV or a pcap / pcapng capture here, or{" "}
               <button type="button" disabled={disabled} onClick={() => input.current?.click()}
                       className="font-medium text-brand-700 hover:underline disabled:no-underline">choose a file</button>
             </p>
