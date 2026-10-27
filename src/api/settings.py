@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     max_upload_mb: int = 100                         # Cloudflare Free caps request bodies at 100 MB
     retention_days: int = 30
-    enable_pcap: bool = False                        # until the flow extractor passes its parity test
+    enable_pcap: bool = True                         # pcap / pcapng uploads, turned into flows by src/flowmeter
 
     access_token_minutes: int = 15
     refresh_token_days: int = 7

@@ -53,6 +53,7 @@ def summary(upload_id: uuid.UUID, user: User = Depends(get_current_user), db: Se
         n_unknown=s.n_unknown, attack_breakdown=s.attack_breakdown,
         unknown_breakdown=service.breakdown(path, "reason", decision="unknown"),
         label_agreement=s.label_agreement, inference_ms=s.inference_ms, processing_ms=upload.processing_ms,
+        capture=s.capture,
         model=ModelRef(version_id=upload.model_version_id, bundle_id=version.bundle_id if version else None,
                        experiment=source.get("experiment"), model=source.get("model")))
 

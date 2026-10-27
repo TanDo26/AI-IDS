@@ -49,8 +49,8 @@ def _admit(request: Request, user: User):
 
 @router.post("", response_model=UploadOut, status_code=201)
 async def create_upload(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """multipart/form-data with one file in the field `file`: a CSV exported by CICFlowMeter
-    (or a PCAP / PCAPNG capture when enabled). The type is read from the file's content."""
+    """multipart/form-data with one file in the field `file`: a CSV exported by CICFlowMeter, or a
+    pcap / pcapng capture (unless IDS_ENABLE_PCAP=false). The type is read from the file's content."""
     # No body parameters: FastAPI hasn't read the body yet, so these checks run before it arrives
     engine = await run_in_threadpool(_admit, request, user)
     async with request.form(max_files=1, max_fields=10) as form:

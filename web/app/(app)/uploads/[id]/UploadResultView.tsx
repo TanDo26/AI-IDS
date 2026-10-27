@@ -10,7 +10,7 @@ import { UploadStatus } from "@/components/UploadStatus";
 import { Alert } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { formatBytes, formatDateTime, formatDuration } from "@/lib/format";
-import { useSummary, useUpload, type FlowQuery } from "@/lib/results";
+import { captureFacts, useSummary, useUpload, type FlowQuery } from "@/lib/results";
 import type { Decision, Summary, Upload } from "@/lib/types";
 import { isActive } from "@/lib/uploads";
 
@@ -70,9 +70,11 @@ function Header({ upload }: { upload: Upload }) {
 
 function Progress({ upload }: { upload: Upload }) {
   const queued = upload.status === "queued";
+  // A capture is turned into flows first (progress by bytes read), then analysed (progress by flows)
+  const step = upload.status === "converting" ? "Extracting flows from the capture" : "Analysing";
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-6" aria-live="polite">
-      <p className="font-medium">{queued ? "Waiting for a worker…" : `Analysing… ${upload.progress}%`}</p>
+      <p className="font-medium">{queued ? "Waiting for a worker…" : `${step}… ${upload.progress}%`}</p>
       <p className="mt-1 text-sm text-slate-500">The results appear here as soon as every flow is classified.</p>
       {!queued && (
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden>
@@ -145,6 +147,7 @@ function AnalysisFacts({ summary }: { summary: Summary }) {
     facts.push(["Agrees with Label", `${(100 * summary.label_agreement).toFixed(1)}%`,
                 "Attack-vs-benign agreement with the file's Label column (attack names differ between tools)"]);
   }
+  if (summary.capture) facts.push(...captureFacts(summary.capture));
   return (
     <dl className="space-y-2 text-sm">
       {facts.map(([term, value, hint]) => (

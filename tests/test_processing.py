@@ -18,7 +18,7 @@ from src.api.settings import get_settings
 from src.api.uploads import processing, service
 from src.api.worker import tasks
 from tests.conftest import TINY_A
-from tests.helpers import API, bearer, flows_csv, upload_file
+from tests.helpers import API, bearer, capture, flows_csv, upload_file
 from tests.tiny_bundle import CANONICAL_FLOWS, FEATURES
 
 EXPECTED = [(decision, reason, cls) for _, decision, reason, cls in CANONICAL_FLOWS.values()]
@@ -169,6 +169,7 @@ def test_missing_features_at_processing_time(uploaded, run_queued, settings, db)
 @pytest.mark.parametrize("content, text", [
     (lambda header: header, "no flows"),
     (lambda header: header + b"1,2,3\n" + b"4,5,6,7,8,9,10,11,12,13,14,15\n", "Could not read the CSV"),
+    (lambda header: b"", "Could not read the CSV after 0 flows"),                # emptied after the upload
 ])
 def test_unreadable_csv(uploaded, run_queued, settings, db, content, text):
     upload_id = uploaded()
@@ -193,11 +194,63 @@ def test_no_active_bundle_when_the_job_runs(uploaded, run_queued, settings, db):
     failed_with(db, settings, upload_id, "No active model bundle")
 
 
-def test_pcap_is_not_processed_yet(uploaded, run_queued, override_settings, settings, db):
-    override_settings(enable_pcap=True)
-    upload_id = uploaded(bytes.fromhex("d4c3b2a1") + b"\x00" * 60, filename="capture.pcap")
+@pytest.mark.parametrize("content, text", [
+    (capture(ipv6_only=True), "no flows to analyse: 2 packets read, 0 of them IPv4; 2 IPv6 packets skipped"),
+    (bytes.fromhex("d4c3b2a1") + b"\x00" * 60, "no flows to analyse"),
+    (bytes.fromhex("0a0d0d0a") + b"\x00" * 60, "Could not read the capture: Not a valid pcapng file"),
+])
+def test_capture_without_flows(uploaded, run_queued, settings, db, content, text):
+    upload_id = uploaded(content, filename="capture.pcap")
     assert run_queued() == ["failed"]
-    failed_with(db, settings, upload_id, "PCAP processing is not available yet")
+    failed_with(db, settings, upload_id, text)
+
+
+# ── captures (pcap / pcapng) ────────────────────────────────
+
+@pytest.mark.parametrize("fmt", ["pcap", "pcapng"])
+def test_capture_is_converted_then_predicted(client, user, uploaded, run_queued, settings, db, monkeypatch, fmt):
+    statuses = []
+    original = processing._set_status
+    monkeypatch.setattr(processing, "_set_status", lambda f, i, s: (statuses.append(s), original(f, i, s)))
+    upload_id = uploaded(capture(fmt), filename=f"capture.{fmt}")
+    assert row(db, upload_id).file_type == fmt
+    assert run_queued() == ["completed"]
+    assert statuses == ["predicting"]                       # after "converting", set when the job started
+
+    upload = row(db, upload_id)
+    assert (upload.status, upload.n_flows, upload.progress) == ("completed", 2, 100)
+    df = results(settings, upload_id)
+    assert df["Flow ID"].tolist() == ["192.168.10.5-10.0.0.9-40000-80-6", "192.168.10.5-10.0.0.53-5353-53-17"]
+    assert df["Timestamp"].tolist() == ["2017-07-05 12:00:00", "2017-07-05 12:00:00.006"]
+    assert "Label" not in df.columns and df["Total Fwd Packets"].tolist() == [4, 1]
+    assert sorted(p.name for p in (settings.results_dir / upload_id).iterdir()) == [processing.RESULTS_FILE]
+
+    summary = client.get(f"{API}/uploads/{upload_id}/summary", headers=bearer(user)).json()
+    assert summary["n_flows"] == 2 and summary["label_agreement"] is None
+    stats = summary["capture"]
+    assert {k: stats[k] for k in ("packets", "ipv4", "flows", "short_flows", "skipped")} == {
+        "packets": 8, "ipv4": 8, "flows": 2, "short_flows": 0, "skipped": {}}
+    assert stats["extract_ms"] >= 0
+
+
+def test_csv_summary_has_no_capture_stats(client, user, uploaded, run_queued):
+    upload_id = uploaded()
+    run_queued()
+    assert client.get(f"{API}/uploads/{upload_id}/summary", headers=bearer(user)).json()["capture"] is None
+
+
+def test_deleted_while_converting(uploaded, run_queued, settings, db, monkeypatch):
+    original = processing._set_progress
+
+    def delete_first(factory, upload_id, progress):
+        _delete(str(upload_id))
+        original(factory, upload_id, progress)
+
+    monkeypatch.setattr(processing, "_set_progress", delete_first)
+    upload_id = uploaded(capture(), filename="capture.pcap")
+    assert run_queued() == ["skipped"]
+    assert row(db, upload_id).status == "converting"
+    assert not (settings.results_dir / upload_id).exists()
 
 
 # ── deletion ────────────────────────────────────────────────

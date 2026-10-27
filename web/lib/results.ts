@@ -4,7 +4,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { API_BASE, ApiError, api } from "@/lib/api";
-import type { Decision, Flow, FlowPage, Summary, Upload } from "@/lib/types";
+import { formatDuration, formatNumber } from "@/lib/format";
+import type { CaptureStats, Decision, Flow, FlowPage, Summary, Upload } from "@/lib/types";
 import { isActive } from "@/lib/uploads";
 
 export const DECISIONS: Record<Decision, { label: string; swatch: string; badge: string; hint: string }> = {
@@ -71,6 +72,31 @@ export function nextSort(current: string, column: string): string {
 export async function downloadExport(id: string, q: Parameters<typeof exportPath>[1]) {
   await api("/auth/me");
   window.location.assign(`${API_BASE}${exportPath(id, q)}`);
+}
+
+const SKIPPED: Record<string, string> = {
+  ipv6: "IPv6", not_ip: "not IP", malformed: "damaged", unsupported_link: "unsupported link type",
+};
+
+/** What the flow extractor read from an uploaded capture, as [term, value, hint] rows. */
+export function captureFacts(c: CaptureStats): Array<[string, string, string?]> {
+  const facts: Array<[string, string, string?]> = [
+    ["Flows extracted", `${formatNumber(c.flows)} from ${formatNumber(c.packets)} packets`,
+     "IPv4 TCP, UDP and ICMP flows, cut the way CICFlowMeter cuts them"],
+  ];
+  if (c.short_flows) {
+    facts.push(["Single-packet flows", `${formatNumber(c.short_flows)} left out`,
+                "The training data has no single-packet flows, so the models can't judge them"]);
+  }
+  const skipped = Object.entries(c.skipped).filter(([, n]) => n > 0);
+  if (skipped.length) {
+    const total = skipped.reduce((sum, [, n]) => sum + n, 0);
+    facts.push(["Packets not used", formatNumber(total),
+                `${skipped.map(([reason, n]) => `${formatNumber(n)} ${SKIPPED[reason] ?? reason}`).join(", ")}. `
+                + "Only IPv4 forms flows, as in the training data"]);
+  }
+  facts.push(["Flow extraction", formatDuration(c.extract_ms)]);
+  return facts;
 }
 
 /** "10.0.0.1:443 → 10.0.0.2:80" from the flow's metadata, or null if the upload had no addresses. */

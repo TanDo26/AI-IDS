@@ -1,10 +1,12 @@
 """
 Processing an upload (run by the Celery task in src/api/worker/tasks.py; free of Celery itself).
 
-    queued -> predicting (CSV) / converting (PCAP, Stage D) -> completed | failed
+    CSV:             queued -> predicting -> completed | failed
+    pcap / pcapng:   queued -> converting -> predicting -> completed | failed
 
-The CSV is read in batches of BATCH_ROWS. Each batch is predicted and appended to
-<results_dir>/<upload_id>/flows.parquet:
+A capture is first turned into flows by src/flowmeter (written to a temporary Parquet file in the
+results directory, progress by bytes read). Flows, from the CSV or the capture, are then read in
+batches of BATCH_ROWS. Each batch is predicted and appended to <results_dir>/<upload_id>/flows.parquet:
 - `row` (0-based, the id the results endpoints use);
 - metadata (Flow ID, IPs, ports, timestamp) and the uploaded `Label`, when present;
 - the prediction columns;
@@ -34,6 +36,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from src.api.db.models import ModelVersion, PredictionSummary, Upload
 from src.api.settings import Settings
 from src.api.uploads.service import raw_path, results_dir
+from src.flowmeter import CaptureError, flow_batches
 from src.inference.engine import InferenceEngine
 from src.inference.manager import ModelManager
 from src.inference.schema import LABEL_COLUMN, METADATA_COLUMNS
@@ -42,6 +45,8 @@ log = logging.getLogger(__name__)
 
 BATCH_ROWS = 50_000
 RESULTS_FILE = "flows.parquet"
+CONVERTED_FILE = "capture-flows.parquet"        # a capture's flows before prediction; removed afterwards
+SKIPPED = ("ipv6", "not_ip", "malformed", "unsupported_link")
 PREDICTION_COLUMNS = {
     "decision": pa.string(), "reason": pa.string(), "predicted_class": pa.int64(), "class_name": pa.string(),
     "confidence": pa.float64(), "attack_score": pa.float64(), "anomaly_score": pa.float64(),
@@ -77,6 +82,16 @@ def _set_progress(session_factory: sessionmaker[Session], upload_id: uuid.UUID, 
         changed = db.execute(update(Upload)
                              .where(Upload.id == upload_id, Upload.deleted_at.is_(None))
                              .values(progress=progress)).rowcount
+        db.commit()
+    if not changed:
+        raise UploadGone
+
+
+def _set_status(session_factory: sessionmaker[Session], upload_id: uuid.UUID, status: str) -> None:
+    with session_factory() as db:
+        changed = db.execute(update(Upload)
+                             .where(Upload.id == upload_id, Upload.deleted_at.is_(None))
+                             .values(status=status, progress=0)).rowcount
         db.commit()
     if not changed:
         raise UploadGone
@@ -156,44 +171,131 @@ def _count_rows(path) -> int:
     return max(lines - 1 + (last != b"\n"), 0)
 
 
-def _predict_csv(upload_id, path, out_dir, engine: InferenceEngine, session_factory) -> tuple[int, _Summary]:
-    total = _count_rows(path)
-    summary, done, writer = _Summary(engine), 0, None
-    partial = out_dir / (RESULTS_FILE + ".part")
-    out_dir.mkdir(parents=True, exist_ok=True)
+def _check_features(engine: InferenceEngine, columns) -> None:
+    # The active bundle may have changed since the upload was checked
+    missing = engine.missing_features(columns)
+    if missing:
+        raise ProcessingError(f"{len(missing)} required feature(s) missing: {', '.join(missing)}")
+
+
+class _Results:
+    """flows.parquet being written: each batch of flows is predicted and appended, with progress."""
+
+    def __init__(self, upload_id, out_dir, engine: InferenceEngine, session_factory, total: int):
+        self.upload_id, self.out_dir, self.engine, self.session_factory = upload_id, out_dir, engine, session_factory
+        self.total, self.done, self.writer = total, 0, None
+        self.summary = _Summary(engine)
+        self.partial = out_dir / (RESULTS_FILE + ".part")
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    def add(self, chunk: pd.DataFrame) -> None:
+        engine = self.engine
+        start = time.perf_counter()
+        prepared = engine.prepare(chunk)
+        result = engine.predict_prepared(prepared)
+        self.summary.inference_ms += (time.perf_counter() - start) * 1000
+        self.summary.add(result, prepared.label)
+
+        if self.writer is None:
+            metadata = [c for c in prepared.metadata.columns if c not in engine.required]
+            schema = _schema(engine, metadata, prepared.label is not None)
+            self.writer = pq.ParquetWriter(self.partial, schema, compression="zstd")
+        self.writer.write_table(_results_table(self.writer.schema, self.done, prepared, result))
+        self.done += len(result)
+        _set_progress(self.session_factory, self.upload_id, min(99, 100 * self.done // max(self.total, 1)))
+
+    def close(self) -> None:
+        if self.writer is not None:
+            self.writer.close()
+            self.writer = None
+
+    def commit(self, empty_message: str) -> None:
+        """Move the finished file into place; no flows at all is a failure with this message."""
+        if self.done == 0:
+            self.partial.unlink(missing_ok=True)
+            raise ProcessingError(empty_message)
+        os.replace(self.partial, self.out_dir / RESULTS_FILE)
+
+
+def _predict_csv(upload_id, path, out_dir, engine: InferenceEngine, session_factory) -> _Results:
     # Intake checked the first 64 KB is UTF-8; a stray byte further down (often in Label) isn't worth failing for
     csv_options = {"encoding": "utf-8-sig", "encoding_errors": "replace", "skipinitialspace": True}
+    results = _Results(upload_id, out_dir, engine, session_factory, _count_rows(path))
     try:
-        # The active bundle may have changed since the upload was checked
-        missing = engine.missing_features(pd.read_csv(path, nrows=0, **csv_options).columns)
-        if missing:
-            raise ProcessingError(f"{len(missing)} required feature(s) missing: {', '.join(missing)}")
+        _check_features(engine, pd.read_csv(path, nrows=0, **csv_options).columns)
         with pd.read_csv(path, chunksize=BATCH_ROWS, **csv_options) as reader:
             for chunk in reader:
-                start = time.perf_counter()
-                prepared = engine.prepare(chunk)
-                result = engine.predict_prepared(prepared)
-                summary.inference_ms += (time.perf_counter() - start) * 1000
-                summary.add(result, prepared.label)
-
-                if writer is None:
-                    metadata = [c for c in prepared.metadata.columns if c not in engine.required]
-                    schema = _schema(engine, metadata, prepared.label is not None)
-                    writer = pq.ParquetWriter(partial, schema, compression="zstd")
-                writer.write_table(_results_table(writer.schema, done, prepared, result))
-                done += len(result)
-                _set_progress(session_factory, upload_id, min(99, 100 * done // max(total, 1)))
+                results.add(chunk)
     except (pd.errors.ParserError, pd.errors.EmptyDataError) as e:
-        raise ProcessingError(f"Could not read the CSV after {done:,} flows: {e}")
+        raise ProcessingError(f"Could not read the CSV after {results.done:,} flows: {e}")
+    finally:
+        results.close()
+    results.commit("The CSV contains no flows")
+    return results
+
+
+def _no_flows_message(stats: Counter) -> str:
+    parts = [f"{stats['packets']:,} packets read, {stats['ipv4']:,} of them IPv4"]
+    if stats["short_flows"]:
+        parts.append(f"{stats['short_flows']:,} single-packet flows left out (the training data has none)")
+    if stats["ipv6"]:
+        parts.append(f"{stats['ipv6']:,} IPv6 packets skipped (the models know IPv4 traffic only)")
+    if stats["unsupported_link"]:
+        parts.append(f"{stats['unsupported_link']:,} packets of an unsupported link type skipped")
+    return "The capture has no flows to analyse: " + "; ".join(parts)
+
+
+def _convert_capture(upload_id, path, out_dir, session_factory) -> tuple:
+    """Capture -> flows in out_dir/CONVERTED_FILE. Returns (that path, extraction stats for the summary)."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target, stats, writer, start = out_dir / CONVERTED_FILE, Counter(), None, time.perf_counter()
+    reported = 0
+
+    def progress(fraction: float):
+        nonlocal reported
+        percent = min(99, int(fraction * 100))
+        if percent > reported:
+            reported = percent
+            _set_progress(session_factory, upload_id, percent)
+
+    try:
+        for batch in flow_batches(path, batch_size=BATCH_ROWS, stats=stats, progress=progress):
+            table = pa.Table.from_pandas(batch, preserve_index=False)
+            writer = writer or pq.ParquetWriter(target, table.schema)
+            writer.write_table(table)
+    except CaptureError as e:
+        raise ProcessingError(f"Could not read the capture: {e}")
     finally:
         if writer is not None:
             writer.close()
+    if not stats["flows"]:
+        target.unlink(missing_ok=True)
+        raise ProcessingError(_no_flows_message(stats))
+    capture = {"packets": stats["packets"], "ipv4": stats["ipv4"], "flows": stats["flows"],
+               "short_flows": stats["short_flows"], "skipped": {k: stats[k] for k in SKIPPED if stats[k]},
+               "extract_ms": round((time.perf_counter() - start) * 1000, 1)}
+    return target, capture
 
-    if done == 0:
-        partial.unlink(missing_ok=True)
-        raise ProcessingError("The CSV contains no flows")
-    os.replace(partial, out_dir / RESULTS_FILE)
-    return done, summary
+
+def _predict_capture(upload_id, path, out_dir, engine: InferenceEngine, session_factory) -> tuple[_Results, dict]:
+    converted, capture = _convert_capture(upload_id, path, out_dir, session_factory)
+    try:
+        _set_status(session_factory, upload_id, "predicting")
+        flows = pq.ParquetFile(converted)
+        try:
+            _check_features(engine, flows.schema_arrow.names)
+            results = _Results(upload_id, out_dir, engine, session_factory, flows.metadata.num_rows)
+            try:
+                for batch in flows.iter_batches(BATCH_ROWS):
+                    results.add(batch.to_pandas())
+            finally:
+                results.close()
+        finally:
+            flows.close()
+    finally:
+        converted.unlink(missing_ok=True)
+    results.commit("The capture contains no flows")
+    return results, capture
 
 
 def process_upload(upload_id: uuid.UUID, models: ModelManager, settings: Settings,
@@ -211,8 +313,6 @@ def process_upload(upload_id: uuid.UUID, models: ModelManager, settings: Setting
 
     clock, out_dir = time.monotonic(), results_dir(settings, upload_id)
     try:
-        if file_type != "csv":
-            raise ProcessingError("PCAP processing is not available yet (the flow extractor is still being validated)")
         if not path.exists():
             raise ProcessingError("The uploaded file is no longer available")
         models.ensure_current()
@@ -220,7 +320,11 @@ def process_upload(upload_id: uuid.UUID, models: ModelManager, settings: Setting
         if engine is None:
             raise ProcessingError("No active model bundle. An admin must activate one.")
 
-        n_flows, summary = _predict_csv(upload_id, path, out_dir, engine, session_factory)
+        if file_type == "csv":
+            results, capture = _predict_csv(upload_id, path, out_dir, engine, session_factory), None
+        else:
+            results, capture = _predict_capture(upload_id, path, out_dir, engine, session_factory)
+        n_flows, summary = results.done, results.summary
 
         with session_factory() as db:
             version_id = db.scalar(select(ModelVersion.id).where(ModelVersion.bundle_id == engine.bundle.bundle_id))
@@ -238,6 +342,7 @@ def process_upload(upload_id: uuid.UUID, models: ModelManager, settings: Setting
             row.attack_breakdown = dict(summary.known_attacks.most_common())
             row.label_agreement = summary.agreeing / summary.labelled if summary.labelled else None
             row.inference_ms = round(summary.inference_ms, 1)
+            row.capture = capture
             db.add(row)
             db.commit()
         log.info("Upload %s: %d flows with %s in %.1f s", upload_id, n_flows, engine.bundle.bundle_id,

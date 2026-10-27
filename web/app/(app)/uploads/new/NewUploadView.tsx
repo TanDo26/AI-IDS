@@ -17,7 +17,8 @@ export function NewUploadView() {
       <div>
         <h1 className="text-2xl font-semibold">New upload</h1>
         <p className="mt-1 text-sm text-slate-500">
-          A CSV of network flows exported by CICFlowMeter, with or without a <code>Label</code> column.
+          A CSV of network flows exported by CICFlowMeter, with or without a <code>Label</code> column, or a
+          packet capture (pcap / pcapng), whose IPv4 flows are extracted the way CICFlowMeter extracts them.
           Each flow is classified as benign, a known attack, or unknown.
         </p>
       </div>

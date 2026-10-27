@@ -139,6 +139,8 @@ class PredictionSummary(Base):
     attack_breakdown: Mapped[dict] = mapped_column(JSONType)          # {"DDoS": 42, "Portscan": 15, ...}
     label_agreement: Mapped[float | None] = mapped_column(Float)      # when the CSV had a Label column
     inference_ms: Mapped[float] = mapped_column(Float)
+    # pcap / pcapng only: packets read, flows extracted, what was left out (src/api/uploads/processing.py)
+    capture: Mapped[dict | None] = mapped_column(JSONType)
 
     upload: Mapped[Upload] = relationship(back_populates="summary")
 

@@ -82,17 +82,17 @@ def test_csv_variants_are_accepted(client, user, active_bundle, variant):
 
 
 @pytest.mark.parametrize("file_type, magic", [(t, m) for t, ms in PCAP_HEADERS.items() for m in ms])
-def test_pcap_when_enabled(client, user, active_bundle, override_settings, file_type, magic):
-    override_settings(enable_pcap=True)
+def test_pcap_and_pcapng(client, user, active_bundle, file_type, magic):
     r = send(client, user, bytes.fromhex(magic) + b"\x00" * 60, filename="capture.bin")
     assert r.status_code == 201 and r.json()["file_type"] == file_type
 
 
 # ── rejected files ──────────────────────────────────────────
 
-def test_pcap_is_off_until_the_flow_extractor_is_validated(client, user, active_bundle, settings, db):
+def test_pcap_can_be_turned_off(client, user, active_bundle, override_settings, settings, db):
+    override_settings(enable_pcap=False)
     r = send(client, user, bytes.fromhex("d4c3b2a1") + b"\x00" * 60, filename="capture.pcap")
-    assert r.status_code == 415 and "not enabled" in r.json()["detail"]
+    assert r.status_code == 415 and "turned off" in r.json()["detail"]
     assert stored_files(settings) == [] and rows(db) == []
 
 
