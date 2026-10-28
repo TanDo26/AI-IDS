@@ -10,6 +10,7 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.pipeline_config import config_path
 from src.data.load_data import load_dataset
 from src.data.clean_data import clean_dataset
 from src.data.split_data import random_split, temporal_split, save_split
@@ -18,8 +19,7 @@ from src.data.split_data import random_split, temporal_split, save_split
 def main():
     start = time.perf_counter()
 
-    config_path = PROJECT_ROOT / "configs" / "config.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path(), "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     print("=" * 70)

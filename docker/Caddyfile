@@ -1,5 +1,14 @@
 {
 	admin off
+	servers {
+		# Requests arrive from cloudflared (or the host's port forward) on a private Docker address.
+		# Trust their client-address headers: Cloudflare sets Cf-Connecting-Ip itself, so a browser
+		# can't fake it. Without this every visitor would share cloudflared's address, and with it
+		# the per-address sign-in and sign-up limits.
+		trusted_proxies static private_ranges
+		client_ip_headers Cf-Connecting-Ip X-Forwarded-For
+		trusted_proxies_strict
+	}
 }
 
 # One origin: /api/* goes to FastAPI, everything else to the Next.js frontend (plan §C.1, §E)
@@ -8,6 +17,13 @@
 	# max_size only fails once that much has been read (e.g. a body without Content-Length)...
 	request_body {
 		max_size 100MB
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
 	}
 
 	handle /api/* {
@@ -21,11 +37,27 @@
 
 		reverse_proxy api:8000 {
 			header_up X-Request-ID {http.request.uuid}
+			# One address, the visitor's: uvicorn reads the first entry
+			header_up X-Forwarded-For {client_ip}
 		}
 	}
 
-	# Everything else is the Next.js frontend (web/)
-	handle {
+	# Build output: content-hashed file names, safe to cache anywhere for good
+	handle /_next/static/* {
 		reverse_proxy web:3000
 	}
+
+	# Everything else is the Next.js frontend (web/). Next marks prerendered pages
+	# `s-maxage=31536000`; a CDN keeping them would serve, after a redeploy, pages whose
+	# chunk files no longer exist. Browsers and Cloudflare must check back instead.
+	handle {
+		reverse_proxy web:3000 {
+			header_down Cache-Control "no-cache"
+		}
+	}
+}
+
+# Container healthcheck only (not published): answers without involving the API or the frontend
+:8081 {
+	respond "ok"
 }

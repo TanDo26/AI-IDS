@@ -13,7 +13,6 @@ from sqlalchemy import update
 
 from src.api.db.models import Upload
 from src.api.runtime.explainers import ExplainerCache
-from src.api.uploads import processing
 from src.inference.bundle import BundleError
 from src.inference.manager import ModelManager
 from tests.conftest import TINY_A, TINY_B

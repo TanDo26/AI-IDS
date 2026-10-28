@@ -2,8 +2,6 @@
 Model evaluation utilities for the GeNIS IDS pipeline.
 """
 
-import time
-import pandas as pd
 from .metrics import calculate_metrics
 from src.preprocessing.artifacts import get_fs_profile
 
@@ -16,7 +14,6 @@ def evaluate_experiment(model, X_test, y_test, experiment: dict,
     strategy = experiment["strategy"]
     label_type = experiment.get("label", "binary")
 
-    start = time.perf_counter()
     y_pred = model.predict(X_test)
 
     y_prob = None

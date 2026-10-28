@@ -3,7 +3,6 @@ Package a trained multiclass experiment as a model bundle for the IDS server.
 """
 import sys
 import json
-import time
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -16,11 +15,13 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.pipeline_config import config_path
 from src.training.train import load_split, model_artifact_path, TORCH_MODELS
 from src.preprocessing.artifacts import get_fs_profile, preprocessing_artifact_paths
 from src.evaluation.metrics import calculate_metrics
 from src.models.anomaly import build_anomaly_detector
 from src.inference.open_set import anomaly_scores, decide, known_thresholds, BENIGN, KNOWN_ATTACK, UNKNOWN
+from src.inference.benchmark import benchmark_cpu
 from src.inference.bundle import (
     Bundle, save_bundle, load_bundle,
     EXPECTED_CLASS_COL, EXPECTED_PROBA_PREFIX, EXPECTED_ANOMALY_COL, EXPECTED_DECISION_COL,
@@ -163,36 +164,8 @@ def selftest_rows(bundle, X_val, y_val, val_result, per_class):
     return out
 
 
-def benchmark_cpu(bundle, X, n_single=200, batch_size=10000, repeats=3):
-    """End-to-end (selection + preprocessing + classifier + anomaly detector + decision) latency."""
-    bundle.predict(X.iloc[:1])  # warm-up
-
-    single = []
-    for i in range(min(n_single, len(X))):
-        row = X.iloc[[i]]
-        start = time.perf_counter()
-        bundle.predict(row)
-        single.append((time.perf_counter() - start) * 1000)
-
-    batch = X.iloc[:batch_size]
-    batch_ms = []
-    for _ in range(repeats):
-        start = time.perf_counter()
-        bundle.predict(batch)
-        batch_ms.append((time.perf_counter() - start) * 1000)
-    batch_median = float(np.median(batch_ms))
-
-    return {
-        "single_flow_ms_p50": round(float(np.percentile(single, 50)), 3),
-        "single_flow_ms_p95": round(float(np.percentile(single, 95)), 3),
-        "batch_size": len(batch),
-        "batch_ms_median": round(batch_median, 1),
-        "batch_flows_per_second": int(len(batch) / (batch_median / 1000)),
-    }
-
-
 def main(exp, out_dir, per_class):
-    with open(PROJECT_ROOT / "configs" / "config.yaml", "r", encoding="utf-8") as f:
+    with open(config_path(), "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     experiment = resolve_experiment(config, exp)

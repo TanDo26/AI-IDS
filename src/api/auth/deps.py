@@ -45,6 +45,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         raise HTTPException(status_code=401, detail="Invalid access token", headers={"WWW-Authenticate": "Bearer"})
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
+    request.state.user_id = user.id         # for the access log (src/api/main.py)
     return user
 
 

@@ -1,0 +1,4 @@
+# Development: the test suite, the linter (ruff.toml) and the load test (loadtest/).
+-r test.txt
+ruff==0.17.*
+locust>=2.30
