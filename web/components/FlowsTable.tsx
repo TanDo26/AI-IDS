@@ -68,7 +68,6 @@ export function FlowsTable({ summary, query, onQueryChange }:
                 <th className="px-3 py-2 font-medium">Flow</th>
                 <SortHeader label="Decision" column="decision" query={query} onSort={set} />
                 <SortHeader label="Class" column="class_name" query={query} onSort={set} />
-                <SortHeader label="Confidence" column="confidence" query={query} onSort={set} right />
                 <SortHeader label="Anomaly" column="anomaly_score" query={query} onSort={set} right
                             hint="Isolation Forest score: higher is more unusual than benign training traffic" />
                 <SortHeader label="Imputed" column="imputed_cells" query={query} onSort={set} right
@@ -149,7 +148,6 @@ function Row({ flow, open, onExplain }: { flow: Flow; open: boolean; onExplain: 
         {REASONS[flow.reason] && <span className="block text-xs text-slate-500">{REASONS[flow.reason]}</span>}
       </td>
       <td className="whitespace-nowrap px-3 py-2">{flow.class_name}</td>
-      <td className="px-3 py-2 text-right tabular-nums">{(100 * flow.confidence).toFixed(1)}%</td>
       <td className="px-3 py-2 text-right tabular-nums">{flow.anomaly_score.toFixed(3)}</td>
       <td className={`px-3 py-2 text-right tabular-nums ${flow.imputed_cells ? "" : "text-slate-400"}`}>
         {formatNumber(flow.imputed_cells)}
