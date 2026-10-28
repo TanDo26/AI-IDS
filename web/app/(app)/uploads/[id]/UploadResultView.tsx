@@ -143,10 +143,6 @@ function AnalysisFacts({ summary }: { summary: Summary }) {
     ["Inference", formatDuration(summary.inference_ms)],
     ["Total processing", formatDuration(summary.processing_ms)],
   ];
-  if (summary.label_agreement !== null) {
-    facts.push(["Agrees with Label", `${(100 * summary.label_agreement).toFixed(1)}%`,
-                "Attack-vs-benign agreement with the file's Label column (attack names differ between tools)"]);
-  }
   if (summary.capture) facts.push(...captureFacts(summary.capture));
   return (
     <dl className="space-y-2 text-sm">

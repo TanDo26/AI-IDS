@@ -66,7 +66,6 @@ function Panel({ uploadId, flow, titleId, onClose }:
             <Fact term="Attack score" value={percentOf(flow.attack_score)} hint="1 − probability of benign" />
             <Fact term="Anomaly score" value={flow.anomaly_score.toFixed(3)}
                   hint="Isolation Forest score: higher is more unusual than benign training traffic" />
-            {flow.label != null && <Fact term="Label in the file" value={flow.label} />}
             {flow.imputed_cells > 0 && (
               <Fact term="Imputed values" value={String(flow.imputed_cells)}
                     hint="Missing or non-numeric feature values, filled in before predicting" />
