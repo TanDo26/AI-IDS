@@ -13,6 +13,17 @@ x-app-env: &app-env
   IDS_DISK_WARNING_PERCENT: ${IDS_DISK_WARNING_PERCENT:-85}
   IDS_LOG_FORMAT: ${IDS_LOG_FORMAT:-json}       # one JSON object per line, with request / task ids
   IDS_LOG_LEVEL: ${IDS_LOG_LEVEL:-INFO}
+  # Email verification (README "Email verification"); console = links in the api log only
+  IDS_EMAIL_VERIFICATION: ${IDS_EMAIL_VERIFICATION:-false}
+  IDS_EMAIL_TOKEN_HOURS: ${IDS_EMAIL_TOKEN_HOURS:-24}
+  IDS_PUBLIC_URL: ${IDS_PUBLIC_URL:-}
+  IDS_MAIL_BACKEND: ${IDS_MAIL_BACKEND:-console}
+  IDS_MAIL_FROM: "${IDS_MAIL_FROM:-AI-IDS <no-reply@localhost>}"
+  IDS_SMTP_HOST: ${IDS_SMTP_HOST:-}
+  IDS_SMTP_PORT: ${IDS_SMTP_PORT:-587}
+  IDS_SMTP_USERNAME: ${IDS_SMTP_USERNAME:-}
+  IDS_SMTP_PASSWORD: ${IDS_SMTP_PASSWORD:-}
+  IDS_SMTP_SECURITY: ${IDS_SMTP_SECURITY:-starttls}
   # The api runs several uvicorn workers: /metrics sums their HTTP metrics through this directory
   PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
 
@@ -288,7 +299,20 @@ services:
       E2E_ADMIN_PASSWORD: ${E2E_ADMIN_PASSWORD:-}
       E2E_FLOWS_CSV: ${E2E_FLOWS_CSV:-e2e/data/flows.csv}
       E2E_CAPTURE: ${E2E_CAPTURE:-e2e/data/capture.pcap}
+      # With IDS_EMAIL_VERIFICATION on, the sign-up step reads its link from Mailpit (profile mail)
+      E2E_MAILPIT_URL: ${E2E_MAILPIT_URL:-http://mailpit:8025}
     command: ["sh", "-c", "npm ci --no-audit --no-fund --loglevel=error && npx playwright test"]
+
+  # Mail catcher for development and the smoke test: keeps every email the app sends, shown at
+  # http://127.0.0.1:8025; nothing leaves the machine. Point the app at it in .env:
+  #   IDS_MAIL_BACKEND=smtp  IDS_SMTP_HOST=mailpit  IDS_SMTP_PORT=1025  IDS_SMTP_SECURITY=none
+  #   docker compose --profile app --profile mail up -d
+  mailpit:
+    image: axllent/mailpit:v1.31.5
+    profiles: [mail]
+    ports:
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
 
   # Load test of the running app stack (loadtest/locustfile.py, README "Load test"); from inside the
   # network, through Caddy:

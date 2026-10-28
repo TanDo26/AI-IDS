@@ -5,13 +5,29 @@ import { useRouter } from "next/navigation";
 
 import { ApiError, api, readCookie } from "@/lib/api";
 import { CSRF_COOKIE } from "@/lib/session";
-import type { TokenResponse, User } from "@/lib/types";
+import type { TokenResponse, User, VerificationSent, VerifyEmailResponse } from "@/lib/types";
 
 export const ME_KEY = ["me"] as const;
+export const VERIFY_POLL_MS = 5_000;
 
-/** The signed-in user. Role and active status come from the API on every call, never from a cookie. */
+/** The signed-in user. Role and active status come from the API on every call, never from a cookie.
+ *  While the email address awaits confirmation, it is asked again every few seconds, so the app opens
+ *  by itself once the link has been used (often in another tab or on a phone). */
 export function useMe({ enabled = true }: { enabled?: boolean } = {}) {
-  return useQuery({ queryKey: ME_KEY, queryFn: () => api<User>("/auth/me"), staleTime: 60_000, enabled });
+  return useQuery({
+    queryKey: ME_KEY, queryFn: () => api<User>("/auth/me"), staleTime: 60_000, enabled,
+    refetchInterval: (query) => (query.state.data?.needs_email_verification ? VERIFY_POLL_MS : false),
+  });
+}
+
+/** A new verification link for the signed-in user (earlier ones stop working). */
+export function resendVerification() {
+  return api<VerificationSent>("/auth/verify-email/resend", { method: "POST" });
+}
+
+/** Confirm an address with the token of its link; needs no session. */
+export function verifyEmail(token: string) {
+  return api<VerifyEmailResponse>("/auth/verify-email", { json: { token } });
 }
 
 export function useLogout() {

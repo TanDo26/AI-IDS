@@ -12,11 +12,13 @@ The environment is fixed here, before anything reads the settings:
   the offline store) or `register_bundle` / `active_bundle` (files + model_versions, as the server).
 - Celery doesn't run: uploads queued for processing are collected in `queued_jobs`, and
   `run_queued()` processes them in-process through the real task (retry and on_failure included).
+- Email: `outbox` collects what the app would send; `verifying` also turns email verification on.
 """
 
 import os
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -118,9 +120,11 @@ def db(database):
 
 @pytest.fixture
 def make_user(db):
-    def make(email="alice@example.com", username=None, password=PASSWORD, role="user", is_active=True) -> User:
+    def make(email="alice@example.com", username=None, password=PASSWORD, role="user", is_active=True,
+             verified=True) -> User:
         user = User(email=email, username=username or email.split("@")[0],
-                    password_hash=security.hash_password(password), role=role, is_active=is_active)
+                    password_hash=security.hash_password(password), role=role, is_active=is_active,
+                    email_verified_at=datetime.now(timezone.utc) if verified else None)
         db.add(user)
         db.commit()
         return user
@@ -169,6 +173,24 @@ def install_bundle(model_store, tiny_bundles):
             model_store.activate(bundle_id, actor="pytest")
         return path
     return install
+
+
+# ── email ───────────────────────────────────────────────────
+
+@pytest.fixture
+def outbox(monkeypatch) -> list:
+    """Emails the app sends (src/api/mail.Message), collected instead of sent."""
+    from src.api import mail
+    sent = []
+    monkeypatch.setattr(mail, "send", sent.append)
+    return sent
+
+
+@pytest.fixture
+def verifying(override_settings, outbox) -> list:
+    """IDS_EMAIL_VERIFICATION on (with SMTP configured, so no warning); returns the outbox."""
+    override_settings(email_verification=True, mail_backend="smtp", smtp_host="smtp.test")
+    return outbox
 
 
 # ── Celery ──────────────────────────────────────────────────

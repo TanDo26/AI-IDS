@@ -118,4 +118,4 @@ jobs:
       - name: The API image imports the app and the flow extractor
         run: docker run --rm ai-ids-api:ci python -c "import src.api.main, src.api.worker.tasks, src.flowmeter"
       - name: Compose file is valid
-        run: docker compose --profile app --profile tunnel --profile quick-tunnel --profile pipeline --profile test config --quiet
+        run: docker compose --profile app --profile tunnel --profile quick-tunnel --profile mail --profile pipeline --profile test config --quiet

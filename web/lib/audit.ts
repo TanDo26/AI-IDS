@@ -7,13 +7,14 @@ import { api } from "@/lib/api";
 import type { AuditEntry, AuditPage } from "@/lib/types";
 
 // Every action the API writes (src/api/admin/service.py, runtime/model_registry.py, uploads/service.py,
-// scripts/create_admin.py)
+// auth/verification.py, scripts/create_admin.py)
 export const ACTIONS: Record<string, string> = {
   "user.create_admin": "Admin account created",
   "user.promote": "Made admin",
   "user.demote": "Admin role removed",
   "user.deactivate": "Deactivated",
   "user.reactivate": "Reactivated",
+  "user.purge_unverified": "Unconfirmed account removed",
   "model.activate": "Model activated",
   "model.rollback": "Model rolled back",
   "model.rescan": "Model store rescanned",
@@ -49,6 +50,9 @@ export function describeDetails(entry: Pick<AuditEntry, "action" | "details">): 
       return String(d.email ?? "");
     case "user.create_admin":
       return `${d.email}${d.via ? ` via ${d.via}` : ""}`;
+    case "user.purge_unverified":
+      // A newer sign-up took its email or username; it had never confirmed its address
+      return `${d.email} (${d.username}), never confirmed: its address or username was signed up for again`;
     case "model.activate":
     case "model.rollback":
       return `${d.bundle_id}${d.previous ? ` (was ${d.previous})` : ""}`;

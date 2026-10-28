@@ -2,8 +2,8 @@
 export const CSRF_COOKIE = "ids_csrf";
 export const CSRF_HEADER = "X-CSRF-Token";
 
-// Pages reachable without a session
-export const PUBLIC_PATHS = ["/login", "/signup", "/healthz"];
+// Pages reachable without a session (an email's verification link may open on another device)
+export const PUBLIC_PATHS = ["/login", "/signup", "/verify-email", "/healthz"];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

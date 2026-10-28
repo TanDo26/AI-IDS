@@ -10,14 +10,14 @@ from pydantic import BaseModel, Field
 
 import pandas as pd
 
-from src.api.auth.deps import get_current_user
+from src.api.auth.deps import get_verified_user
 from src.api.runtime.model_manager import require_engine
 from src.inference.engine import InferenceEngine, MissingFeaturesError
 
 MAX_BATCH = 10_000
 
 # Any logged-in user; scripts send `Authorization: Bearer <access_token from /auth/login>`
-router = APIRouter(tags=["inference"], dependencies=[Depends(get_current_user)])
+router = APIRouter(tags=["inference"], dependencies=[Depends(get_verified_user)])
 
 
 class PredictRequest(BaseModel):

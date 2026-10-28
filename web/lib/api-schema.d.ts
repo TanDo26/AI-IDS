@@ -53,8 +53,52 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Signup */
+        /**
+         * Signup
+         * @description Creates the account and signs it in. With email verification on, a link goes to the address and
+         *     the app stays closed (403) until it is opened.
+         */
         post: operations["signup_api_v1_auth_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Email
+         * @description Confirms the address of the link's account. No session needed: the link may open on another device.
+         */
+        post: operations["verify_email_api_v1_auth_verify_email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify-email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Verification
+         * @description A new link for the signed-in user; earlier ones stop working.
+         */
+        post: operations["resend_verification_api_v1_auth_verify_email_resend_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1313,6 +1357,13 @@ export interface components {
             created_at: string;
             /** Last Login At */
             last_login_at: string | null;
+            /** Email Verified At */
+            email_verified_at: string | null;
+            /**
+             * Needs Email Verification
+             * @description The user can't use the app until they confirm their address (IDS_EMAIL_VERIFICATION).
+             */
+            readonly needs_email_verification: boolean;
         };
         /** UserOut */
         UserOut: {
@@ -1333,6 +1384,13 @@ export interface components {
             created_at: string;
             /** Last Login At */
             last_login_at: string | null;
+            /** Email Verified At */
+            email_verified_at: string | null;
+            /**
+             * Needs Email Verification
+             * @description True while IDS_EMAIL_VERIFICATION is on and the address isn't confirmed: the app is closed.
+             */
+            readonly needs_email_verification: boolean;
         };
         /** UserPage */
         UserPage: {
@@ -1364,6 +1422,21 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VerificationSent */
+        VerificationSent: {
+            /** Sent To */
+            sent_to: string;
+        };
+        /** VerifyEmailRequest */
+        VerifyEmailRequest: {
+            /** Token */
+            token: string;
+        };
+        /** VerifyEmailResponse */
+        VerifyEmailResponse: {
+            /** Email */
+            email: string;
         };
     };
     responses: never;
@@ -1443,6 +1516,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_email_api_v1_auth_verify_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyEmailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_verification_api_v1_auth_verify_email_resend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationSent"];
                 };
             };
         };

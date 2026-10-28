@@ -28,6 +28,7 @@ JSONType = JSON().with_variant(JSONB(), "postgresql")
 BigId = BigInteger().with_variant(Integer(), "sqlite")  # SQLite only auto-increments INTEGER keys
 
 ROLES = ("user", "admin")
+EMAIL_TOKEN_PURPOSES = ("verify",)
 FILE_TYPES = ("csv", "pcap", "pcapng")
 UPLOAD_STATUSES = ("queued", "converting", "predicting", "completed", "failed")
 MODEL_STATUSES = ("available", "active", "invalid", "retired")
@@ -57,8 +58,24 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     created_at: Mapped[datetime] = _now()
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set when the user opens the link sent to their address (src/api/auth/verification.py)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     uploads: Mapped[list["Upload"]] = relationship(back_populates="user")
+
+
+class EmailToken(Base):
+    """A one-time link sent by email; only its SHA-256 is stored."""
+    __tablename__ = "email_tokens"
+    __table_args__ = (CheckConstraint(_in("purpose", EMAIL_TOKEN_PURPOSES), name="purpose"),)
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    purpose: Mapped[str] = mapped_column(String(16))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _now()
 
 
 class RefreshToken(Base):

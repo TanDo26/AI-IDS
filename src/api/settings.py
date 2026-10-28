@@ -46,6 +46,18 @@ class Settings(BaseSettings):
     cookie_secure: bool = True
     rate_limits_enabled: bool = True
 
+    # New accounts confirm their email address (a link sent by email) before they can use the app
+    email_verification: bool = False
+    email_token_hours: int = 24                      # how long a link works
+    public_url: str = ""                             # e.g. https://ids.example.com; empty: the request's own
+    mail_backend: Literal["console", "smtp"] = "console"   # console: logged instead of sent (development)
+    mail_from: str = "AI-IDS <no-reply@localhost>"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
+
     @property
     def uploads_dir(self) -> Path:
         return self.data_dir / "uploads"
@@ -62,6 +74,12 @@ def get_settings() -> Settings:
     if secret == DEV_SECRET_KEY or len(secret.encode("utf-8")) < MIN_SECRET_BYTES:
         problem = (f"IDS_SECRET_KEY is the development default or shorter than {MIN_SECRET_BYTES} bytes; "
                    'generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"')
+        if settings.env == "production":
+            raise RuntimeError(problem)
+        warnings.warn(problem, stacklevel=2)
+    if settings.email_verification and (settings.mail_backend != "smtp" or not settings.smtp_host):
+        problem = ("IDS_EMAIL_VERIFICATION is on but no mail is sent (IDS_MAIL_BACKEND=smtp and IDS_SMTP_HOST "
+                   "are needed); the verification links only go to the log")
         if settings.env == "production":
             raise RuntimeError(problem)
         warnings.warn(problem, stacklevel=2)

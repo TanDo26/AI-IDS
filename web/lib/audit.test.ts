@@ -21,6 +21,8 @@ describe("audit", () => {
     ["user.promote", { email: "b@x", from: "user", to: "admin" }, "b@x: user → admin"],
     ["user.deactivate", { email: "b@x", from: true, to: false }, "b@x"],
     ["user.create_admin", { email: "a@x", via: "scripts/create_admin.py" }, "a@x via scripts/create_admin.py"],
+    ["user.purge_unverified", { email: "a@x", username: "al" },
+     "a@x (al), never confirmed: its address or username was signed up for again"],
     ["model.activate", { bundle_id: "B-2", previous: "B-1" }, "B-2 (was B-1)"],
     ["model.rollback", { bundle_id: "B-1", previous: null }, "B-1"],
     ["model.rescan", { added: ["B-2", "B-3"], verified: ["B-1", "B-2"], invalid: ["B-3"], retired: [] },
@@ -38,7 +40,8 @@ describe("audit", () => {
 
 describe("users", () => {
   const user = (id: number, role: "user" | "admin", is_active: boolean): AdminUser => ({
-    id, email: `u${id}@x`, username: `u${id}`, role, is_active, created_at: "2026-10-01T00:00:00Z", last_login_at: null });
+    id, email: `u${id}@x`, username: `u${id}`, role, is_active, created_at: "2026-10-01T00:00:00Z", last_login_at: null,
+    email_verified_at: "2026-10-01T00:00:00Z", needs_email_verification: false });
 
   it("offers the opposite role and status, and nothing on your own row", () => {
     expect(userActions(user(2, "user", true), 1).map((a) => [a.label, a.change])).toEqual([

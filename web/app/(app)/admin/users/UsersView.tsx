@@ -112,6 +112,7 @@ function Row({ user, actions, onAction }: { user: AdminUser; actions: UserAction
           <span className={`h-2 w-2 rounded-full ${user.is_active ? "bg-status-good" : "bg-slate-400"}`} aria-hidden />
           {user.is_active ? "Active" : "Deactivated"}
         </span>
+        {user.needs_email_verification && <span className="block text-xs text-amber-800">Email not confirmed</span>}
       </td>
       <td className="whitespace-nowrap px-4 py-2 text-slate-600">{formatDateTime(user.created_at)}</td>
       <td className="whitespace-nowrap px-4 py-2 text-slate-600">{user.last_login_at ? formatDateTime(user.last_login_at) : "Never"}</td>

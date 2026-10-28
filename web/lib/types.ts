@@ -12,6 +12,8 @@ export type TokenResponse = Schemas["TokenResponse"];
 export type LoginRequest = Schemas["LoginRequest"];
 export type SignupRequest = Schemas["SignupRequest"];
 export type PasswordChangeRequest = Schemas["PasswordChangeRequest"];
+export type VerifyEmailResponse = Schemas["VerifyEmailResponse"];
+export type VerificationSent = Schemas["VerificationSent"];
 
 // uploads and results
 export type Upload = Schemas["UploadOut"];
