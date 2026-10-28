@@ -18,7 +18,6 @@ export function FlowsTable({ summary, query, onQueryChange }:
   const id = summary.upload_id;
   const flows = useFlows(id, query);
   const [explaining, setExplaining] = useState<Flow | null>(null);
-  const hasLabel = summary.label_agreement !== null;
   const classes = Object.keys(summary.attack_breakdown).sort();
   const counts: Record<Decision, number> = {
     benign: summary.n_benign, unknown: summary.n_unknown, known_attack: summary.n_known_attack,
@@ -67,7 +66,6 @@ export function FlowsTable({ summary, query, onQueryChange }:
               <tr>
                 <SortHeader label="Row" column="row" query={query} onSort={set} />
                 <th className="px-3 py-2 font-medium">Flow</th>
-                {hasLabel && <th className="px-3 py-2 font-medium">Label</th>}
                 <SortHeader label="Decision" column="decision" query={query} onSort={set} />
                 <SortHeader label="Class" column="class_name" query={query} onSort={set} />
                 <SortHeader label="Confidence" column="confidence" query={query} onSort={set} right />
@@ -79,7 +77,7 @@ export function FlowsTable({ summary, query, onQueryChange }:
             </thead>
             <tbody className="divide-y divide-slate-100">
               {flows.data.items.map((f) => (
-                <Row key={f.row} flow={f} hasLabel={hasLabel} open={explaining?.row === f.row}
+                <Row key={f.row} flow={f} open={explaining?.row === f.row}
                      onExplain={() => setExplaining(f)} />
               ))}
             </tbody>
@@ -127,8 +125,7 @@ function SortHeader({ label, column, query, onSort, right = false, hint }: {
  * A click anywhere on the row explains it, unless the click ended a text selection (copying an
  * address). The row number is the button for keyboard users.
  */
-function Row({ flow, hasLabel, open, onExplain }:
-  { flow: Flow; hasLabel: boolean; open: boolean; onExplain: () => void }) {
+function Row({ flow, open, onExplain }: { flow: Flow; open: boolean; onExplain: () => void }) {
   const ends = endpoints(flow.metadata);
   const decision = DECISIONS[flow.decision];
   return (
@@ -144,7 +141,6 @@ function Row({ flow, hasLabel, open, onExplain }:
         {ends ? <span className="font-mono text-xs">{ends}</span> : <span className="text-slate-400">—</span>}
         {flow.metadata.Timestamp && <span className="block text-xs text-slate-500">{flow.metadata.Timestamp}</span>}
       </td>
-      {hasLabel && <td className="whitespace-nowrap px-3 py-2 text-slate-600">{flow.label ?? "—"}</td>}
       <td className="whitespace-nowrap px-3 py-2">
         <span className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium ${decision.badge}`}>
           <span className={`h-2 w-2 rounded-full ${decision.swatch}`} aria-hidden />

@@ -2,8 +2,8 @@
 Write a sample upload: real flows from a split's test set, as a CSV the web app accepts.
 
 The rows keep the training feature names and add made-up endpoints (Src/Dst IP and port,
-Timestamp) and a Label column with the attack names, so the results page has metadata to show
-and label agreement to compute. Used by the browser smoke test (web/e2e/) and for demos.
+Timestamp), so the results page has metadata to show. Like real traffic, the file has no Label
+column; the classes it holds are printed. Used by the browser smoke test (web/e2e/) and for demos.
 
     python scripts/make_sample_upload.py                          # -> web/e2e/data/flows.csv
     python scripts/make_sample_upload.py --benign 5000 --per-attack 300 --out sample.csv
@@ -11,6 +11,7 @@ and label agreement to compute. Used by the browser smoke test (web/e2e/) and fo
 import sys
 import json
 import argparse
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -47,12 +48,11 @@ def main(split, n_benign, per_attack, seed, out):
     df.insert(2, "Dst IP", [f"205.174.165.{i}" for i in rng.integers(2, 250, n)])
     df.insert(3, "Dst Port", rng.choice([21, 22, 80, 443, 8080], n))
     df.insert(4, "Timestamp", [f"05/07/2017 {9 + s // 3600:02d}:{s // 60 % 60:02d}:{s % 60:02d}" for s in seconds])
-    df["Label"] = [mapping["int_to_label"][str(int(c))] for c in y_test.loc[picked]]
 
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out, index=False)
     print(f"  {n:,} flows -> {out}")
-    for label, count in df["Label"].value_counts().items():
+    for label, count in Counter(mapping["int_to_label"][str(int(c))] for c in y_test.loc[picked]).most_common():
         print(f"    {count:>6,}  {label}")
 
 

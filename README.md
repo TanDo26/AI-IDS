@@ -225,6 +225,7 @@ AI-IDS/
 │   ├── evaluate_open_set.py         # CLI: unseen-attack evaluation (temporal, leave-one-family-out)
 │   ├── create_admin.py              # CLI: first admin account for the web API
 │   ├── make_sample_upload.py        # CLI: real test-split flows as an upload CSV (demos, smoke test)
+│   ├── make_test_uploads.py         # CLI: N files per class (CICFlowMeter CSV / pcap / pcapng) + manifest
 │   ├── make_test_capture.py         # CLI: synthetic pcap for the flow extractor (parity, benchmark)
 │   ├── validate_flowmeter.py        # CLI: compare src/flowmeter with the Java CICFlowMeter
 │   ├── benchmark_bundle.py          # CLI: a bundle's CPU latency against the targets
@@ -728,7 +729,7 @@ Caddy listens on `127.0.0.1:8080` only, so other machines on the network can't r
 
 ```bash
 docker compose --profile app --profile tunnel up -d
-docker compose logs -f cloudflared        # "Registered tunnel connection" x4
+docker compose --profile app --profile tunnel logs -f cloudflared        # "Registered tunnel connection" x4
 ```
 
 If the log says `"cloudflared tunnel run" requires the ID or name of the tunnel`, the token is missing from `.env`.
@@ -737,8 +738,10 @@ If the log says `"cloudflared tunnel run" requires the ID or name of the tunnel`
 
 ```bash
 docker compose --profile app --profile quick-tunnel up -d
-docker compose logs quick-tunnel | grep trycloudflare.com
+docker compose --profile app --profile quick-tunnel logs quick-tunnel | grep trycloudflare.com
 ```
+
+Commands that name `cloudflared` or `quick-tunnel` need both profiles, as above. Their service depends on `proxy`, which is in `app`, and without `--profile app` Compose answers `no such service: proxy`.
 
 **What the proxy does for the tunnel** (`docker/Caddyfile`):
 - **Visitor addresses:** Caddy takes the visitor's address from Cloudflare's `Cf-Connecting-Ip`, which a browser can't fake, and hands only that address to the API. Without this, every visitor would share cloudflared's address, and so would the sign-in (5 a minute) and sign-up (3 an hour) limits. Access logs and sessions record the real address.

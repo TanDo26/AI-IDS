@@ -52,6 +52,7 @@ desktop.ini
 /model_store/
 /data/
 /backups/
+/test_uploads/
 
 # ============================================================
 # Docker / secrets
