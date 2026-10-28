@@ -11,13 +11,37 @@ The classifier runs first, so known attacks never depend on the anomaly detector
 
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.ensemble._iforest import _average_path_length
 
 BENIGN, KNOWN_ATTACK, UNKNOWN = "benign", "known_attack", "unknown"
 
 
 def anomaly_scores(detector, X) -> np.ndarray:
     """Higher = less like the benign traffic the detector was fitted on."""
+    if isinstance(detector, IsolationForest) and hasattr(detector, "_decision_path_lengths"):
+        return _isolation_scores(detector, X)
     return -detector.score_samples(X)
+
+
+def _isolation_scores(forest: IsolationForest, X) -> np.ndarray:
+    """-forest.score_samples(X), bit for bit, about 10x faster for a single flow.
+
+    scikit-learn 1.9 calls each of the 200 trees through joblib with input checks, about 0.1 ms per
+    tree whatever the batch size. This is its _compute_score_samples with the trees' compiled apply()
+    called directly: same leaves, same per-tree arrays, same summation order. Tested against
+    score_samples in tests/test_inference.py; scikit-learn's major.minor is pinned with the bundle.
+    """
+    X = np.asarray(X, dtype=np.float32)
+    subsample = forest._max_features != X.shape[1]
+    depths = np.zeros(X.shape[0], order="f")
+    for tree, features, path_lengths, average_lengths in zip(
+            forest.estimators_, forest.estimators_features_,
+            forest._decision_path_lengths, forest._average_path_length_per_tree):
+        leaves = tree.tree_.apply(np.ascontiguousarray(X[:, features]) if subsample else X)
+        depths += path_lengths[leaves] + average_lengths[leaves] - 1.0
+    denominator = len(forest.estimators_) * _average_path_length([forest._max_samples])
+    return 2 ** -np.divide(depths, denominator, out=np.ones_like(depths), where=denominator != 0)
 
 
 def known_thresholds(thresholds: dict, classes) -> np.ndarray:

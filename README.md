@@ -226,10 +226,15 @@ AI-IDS/
 │   ├── create_admin.py              # CLI: first admin account for the web API
 │   ├── make_sample_upload.py        # CLI: real test-split flows as an upload CSV (demos, smoke test)
 │   ├── make_test_capture.py         # CLI: synthetic pcap for the flow extractor (parity, benchmark)
-│   └── validate_flowmeter.py        # CLI: compare src/flowmeter with the Java CICFlowMeter
+│   ├── validate_flowmeter.py        # CLI: compare src/flowmeter with the Java CICFlowMeter
+│   ├── benchmark_bundle.py          # CLI: a bundle's CPU latency against the targets
+│   └── pipeline_smoke.py            # CLI: prepare → train → evaluate → bundle on synthetic data (CI)
 ├── tests/                           # pytest suite for the web API + inference (tiny synthetic bundle)
 ├── web/                             # Next.js frontend (served by Caddy next to the API)
 │   └── e2e/                         # Playwright browser smoke test of the running stack
+├── loadtest/locustfile.py           # Load test of the running stack (locust)
+├── docker/                          # API image, Caddyfile, nightly backup script, Java reference tool
+├── .github/workflows/ci.yml         # Lint, tests, pipeline smoke run, image builds
 ├── models/                          # Saved trained models (.pkl / .pt)
 ├── results/
 │   ├── metrics/                     # CSV summary tables
@@ -237,8 +242,8 @@ AI-IDS/
 │   ├── pr_curves/                   # PR-AUC curve PNGs
 │   ├── hpo/                         # HPO results (JSON + plots)
 │   └── xai/                         # SHAP plots + feature importance CSVs
-├── Dockerfile                       # Python 3.14 + PyTorch CUDA 13.0
-├── docker-compose.yml               # Services with NVIDIA GPU support
+├── Dockerfile                       # Training pipeline: Python 3.13 + PyTorch CUDA 13.0
+├── docker-compose.yml               # Pipeline (GPU), app stack, tunnel, tests, load test
 └── requirements.txt
 ```
 
@@ -246,7 +251,7 @@ AI-IDS/
 
 ### Prerequisites
 
-- **Python 3.11+** (or Docker)
+- **Python 3.13** (or Docker): the version of the API image too, since model bundles are pickles
 - **PyTorch with CUDA** (for GPU-accelerated MLP/LSTM training)
 - CIC-IDS2017 parquet files placed in `dataset/CIC-IDS2017/`
 - **Docker Desktop** to run the web application (API, worker, database, frontend): see [Web frontend](#web-frontend-web)
@@ -577,7 +582,8 @@ The `app` profile runs the frontend together with the rest of the stack:
 | `worker`, `beat` | Celery |
 | `postgres`, `redis` | Database and broker |
 | `migrate` | One-shot schema upgrade |
-| `proxy` | Caddy on port 8080 |
+| `proxy` | Caddy on port 8080 of this machine only (`127.0.0.1`; see [Deployment](#deployment)) |
+| `backup` | Nightly `pg_dump` into `./backups` |
 
 ```powershell
 # One-time setup
@@ -673,6 +679,197 @@ docker compose --profile app run --rm e2e                  # about 30 s, plus a 
 In PowerShell, set `$env:E2E_ADMIN_EMAIL` and `$env:E2E_ADMIN_PASSWORD` instead. On failure, `web/test-results/` holds a trace and a screenshot and `web/playwright-report/index.html` the report.
 Sign-up allows 3 accounts an hour per address, so a fourth run within the hour stops at sign-up.
 
+## Deployment
+
+The whole app runs on one machine with Docker Compose: this PC for now, a cloud VM later. Visitors reach it through a **Cloudflare Tunnel**, so no router port is opened and Cloudflare provides HTTPS.
+
+### Compose profiles
+
+| Profile | Services | Use |
+|---|---|---|
+| `app` | `proxy` (Caddy), `web`, `api`, `worker`, `beat`, `postgres`, `redis`, `migrate`, `backup` | The application |
+| `tunnel` | `cloudflared` | Publish `app` on your own hostname (named tunnel) |
+| `quick-tunnel` | `quick-tunnel` | Publish `app` on a throwaway `*.trycloudflare.com` address |
+| `pipeline` | `prepare`, `train`, `evaluate`, `run-all`, `hpo`, `xai` | Training on the GPU (`docker compose run --rm train` enables it) |
+| `test` | `postgres-test`, `redis-test` | pytest against real services |
+| `e2e` | `e2e` | Browser smoke test |
+| `loadtest` | `locust` | Load test |
+
+Every long-running service has a healthcheck and `restart: unless-stopped`, so the stack comes back with Docker Desktop. `docker compose --profile app ps` should show each one `(healthy)`. `cloudflared` is the exception: its image has no shell for a healthcheck.
+
+### Production settings
+
+In `.env` (from `.env.example`), before the first start:
+
+| Setting | Why |
+|---|---|
+| `IDS_ENV=production` | The API then refuses to start with the default or a short secret key |
+| `IDS_SECRET_KEY` | Signs the session tokens: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `POSTGRES_PASSWORD` | Set it before the first start. The database volume keeps the password it was created with, so changing it later also needs `ALTER USER` inside Postgres |
+| `IDS_ENABLE_PCAP` | Leave it out (default `true`), or capture uploads are refused |
+| `CLOUDFLARE_TUNNEL_TOKEN` | For the named tunnel (below) |
+
+```bash
+docker compose --profile app up -d --build
+docker compose exec api python scripts/create_admin.py --email you@example.com --username admin
+docker compose exec api python scripts/manage_models.py --db rescan
+docker compose exec api python scripts/manage_models.py --db activate <bundle_id>
+```
+
+Caddy listens on `127.0.0.1:8080` only, so other machines on the network can't reach it directly; visitors come through the tunnel, which runs inside the Docker network. `IDS_HTTP_PORT=8080` would listen on every interface. The PC has to stay awake for the site to be up.
+
+### Publishing with Cloudflare Tunnel
+
+**Named tunnel** (a stable address such as `https://ids.example.com`; needs a domain on Cloudflare, Free plan):
+1. In the Cloudflare dashboard, open **Zero Trust → Networks → Tunnels → Create a tunnel**, choose **Cloudflared** and name it.
+2. Of the install command it shows, copy only the token (the long value after `--token`) into `.env` as `CLOUDFLARE_TUNNEL_TOKEN`.
+3. Add a **public hostname**: e.g. `ids` on your domain, service type `HTTP`, URL `proxy:80`.
+4. Start the stack with the tunnel:
+
+```bash
+docker compose --profile app --profile tunnel up -d
+docker compose logs -f cloudflared        # "Registered tunnel connection" x4
+```
+
+If the log says `"cloudflared tunnel run" requires the ID or name of the tunnel`, the token is missing from `.env`.
+
+**Quick tunnel** (a short demo, no account): the address changes at every start.
+
+```bash
+docker compose --profile app --profile quick-tunnel up -d
+docker compose logs quick-tunnel | grep trycloudflare.com
+```
+
+**What the proxy does for the tunnel** (`docker/Caddyfile`):
+- **Visitor addresses:** Caddy takes the visitor's address from Cloudflare's `Cf-Connecting-Ip`, which a browser can't fake, and hands only that address to the API. Without this, every visitor would share cloudflared's address, and so would the sign-in (5 a minute) and sign-up (3 an hour) limits. Access logs and sessions record the real address.
+- **Security headers:** `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` and `Content-Security-Policy: frame-ancestors 'none'` (no framing). The `Server` header is removed.
+- **Caching:**
+  - The API answers with `Cache-Control: no-store`. Cloudflare caches `.csv` files by default, so without that header a results export could be kept at the edge.
+  - Pages get `no-cache`, so a redeploy never leaves the edge serving pages whose script files are gone.
+  - The hashed files under `/_next/static/` stay cacheable for a year.
+  - Leave Cloudflare's default caching as it is (no "Cache Everything" rule).
+- **Upload size:** uploads over 100 MB are refused before they reach the API (Cloudflare Free's limit is the same).
+
+### Logs
+
+The API, worker and beat write one JSON object per line (`IDS_LOG_FORMAT=json` in Compose; `text` is easier to read on the host). Every request gets one access line with its id, user, status and duration. Everything logged while handling it carries the same `request_id`, which the browser sees as the `X-Request-ID` header. Lines from a processing job carry the Celery `task_id`.
+
+```json
+{"time": "2026-10-27T17:57:26.096+00:00", "level": "INFO", "logger": "ids.access", "message": "GET /api/v1/auth/me 200", "method": "GET", "path": "/api/v1/auth/me", "status": 200, "duration_ms": 5.6, "client": "203.0.113.7", "user_id": 1, "request_id": "10437b11-97b5-4678-b8da-a89264ed8b8b"}
+```
+
+```bash
+docker compose logs -f api worker                        # follow
+docker compose logs api | grep <request id>              # one request
+docker compose logs api | grep '"status": 5'             # server errors
+```
+
+Health checks and Prometheus scrapes are logged at DEBUG only (`IDS_LOG_LEVEL=DEBUG` shows them). Metrics for Prometheus are at `http://api:8000/metrics` inside the Compose network. Grafana is not part of the stack.
+
+### Backups
+
+The `backup` service dumps the database (`pg_dump`, custom format) into `./backups` once a day. The dump runs at the first check after `BACKUP_HOUR` (UTC, default 2), or as soon as the newest dump is more than a day old, so a PC that was off catches up when it's back. The newest `BACKUP_KEEP` (7) dumps are kept. The files contain password hashes and e-mail addresses: copy them somewhere safe, off this machine.
+
+```bash
+export MSYS_NO_PATHCONV=1                                # Git Bash only
+docker compose exec backup sh /backup.sh now             # one more now
+ls backups/
+
+# Restore (replaces the current database): stop what writes to it first
+docker compose stop api worker beat
+docker compose exec backup pg_restore --clean --if-exists --no-owner --single-transaction \
+    --dbname=ids /backups/ids-20261027-175743.dump      # your POSTGRES_DB and dump name
+docker compose start api worker beat
+```
+
+Two things are not in the dump:
+- **`model_store/`:** bundles can be rebuilt from the pipeline, but copy the folder with the backups anyway.
+- **Uploads and results** (volume `ai-ids_appdata`): archive it when needed:
+
+```bash
+docker run --rm -v ai-ids_appdata:/data:ro -v "$(pwd -W)/backups:/out" alpine:3.22 tar czf /out/appdata.tgz -C /data .
+```
+
+(`$(pwd -W)` is Git Bash; use `${PWD}` in PowerShell and `$(pwd)` on Linux.)
+
+### Moving to a VM
+
+1. Install Docker on the VM (e.g. Oracle Cloud Always Free, or student credits), then clone the repository.
+2. Copy `.env`, `model_store/`, the newest dump from `backups/` and, if wanted, `appdata.tgz`.
+3. Start the stack: `docker compose --profile app up -d --build`. `migrate` creates an empty schema.
+4. Restore the dump as above. For the uploads, unpack `appdata.tgz` into the `ai-ids_appdata` volume with the same `alpine` command, using `tar xzf`.
+5. Stop the tunnel on the PC. Then start it on the VM with the same `CLOUDFLARE_TUNNEL_TOKEN`: `docker compose --profile app --profile tunnel up -d`. The hostname stays the same.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request:
+
+| Job | What it checks |
+|---|---|
+| `lint` | `ruff check .` (`ruff.toml`: undefined names, unused imports and variables, syntax-level errors) |
+| `test` | pytest on SQLite, then again against Postgres and Redis service containers |
+| `pipeline` | `scripts/pipeline_smoke.py` with CPU PyTorch: synthetic data for 5 days, prepare → train → evaluate for two experiments, then a bundle built and loaded as the server does (about 20 s) |
+| `web` | Vitest and `tsc` |
+| `images` | Builds the API and web images, checks the API image imports the app, validates `docker-compose.yml` |
+
+The GPU pipeline image (`Dockerfile`, about 12 GB with CUDA PyTorch) is too big for a CI runner. The `pipeline` job runs the same code on CPU instead.
+
+```bash
+pip install -r requirements/dev.txt      # pytest, ruff, locust
+ruff check .
+python scripts/pipeline_smoke.py         # in a temporary directory; your dataset/, models/, results/ are untouched
+```
+
+### Load test and targets
+
+The bundle on its own:
+
+```bash
+python scripts/benchmark_bundle.py --bundle model_store/<bundle_id>
+docker compose exec api python scripts/benchmark_bundle.py --bundle /app/model_store/<bundle_id>   # in the server image
+```
+
+The whole stack, through Caddy, from inside the Docker network:
+- 20 simulated users, each sending a `/predict` or an explanation about once a second;
+- before that, one capture upload is timed, from upload done to results ready;
+- the account can be any user, e.g. the admin; the flows come from `scripts/make_sample_upload.py`;
+- the run fails (exit code 1) when a target is missed.
+
+```bash
+python scripts/make_sample_upload.py                                         # -> web/e2e/data/flows.csv
+python scripts/make_test_capture.py --size-mb 99.5 --out web/e2e/data/load.pcap
+export LOADTEST_EMAIL=you@example.com LOADTEST_CAPTURE=load.pcap
+read -rsp "Password: " LOADTEST_PASSWORD && export LOADTEST_PASSWORD
+docker compose --profile app --profile loadtest run --rm locust                    # 2 minutes
+docker compose --profile app --profile loadtest run --rm locust --tags predict --users 50   # options override
+```
+
+Results on the development PC (8 logical CPUs, Docker Desktop on Windows, load generator on the same machine), EXP-59 (XGBoost, 52 features):
+
+| Measure | Target | Result |
+|---|---|---|
+| One flow, bundle alone (in the API container) | p95 < 1 ms | p50 9 ms, p95 13 ms: **missed** |
+| 10,000 flows, bundle alone | < 1 s | 612 ms in the API (one thread per request, `/batch_predict`); 225 ms in the worker (8 threads, uploads) |
+| `POST /predict`, one request at a time | p95 < 50 ms | p50 27 ms, p95 36 ms |
+| `POST /predict` under 20 users (~14 requests/s) | p95 < 50 ms | p50 28 ms, p95 86 ms: **missed** |
+| One explanation under 20 users | p95 < 300 ms | p50 68 ms, p95 120 ms |
+| 100 MB capture (233,411 packets, 24,321 flows), upload done → results ready | < 2 min | 6.6 s |
+
+**What made it faster.** Before this, one flow took 37 ms (p95) in the bundle and 50–100 ms in the server image.
+
+| Change | Effect |
+|---|---|
+| `OMP_WAIT_POLICY=PASSIVE` in the API image | XGBoost's OpenMP threads were spinning between calls and fighting over the CPUs of a container with several processes. A 10k batch also went from 392 to 226 ms |
+| One OpenMP thread per API request | Concurrent requests no longer each start 8 threads |
+| 4 API processes instead of 2 (`IDS_API_WORKERS`) | Explanation p95 went from 580 ms to 120 ms. Each process uses about 370 MB; set 2 on a machine short of memory |
+| Isolation Forest scored with its trees directly (same result to the bit) | 23 → 2 ms per flow |
+| Flows converted to numbers in one step | 24 → 4 ms per request |
+
+**What is still missed:**
+- **One flow in under 1 ms:** the flow passes through pandas, scikit-learn's preprocessing, XGBoost's Python interface and the Isolation Forest, each costing 1–4 ms of overhead per call. Getting under 1 ms needs the pipeline compiled into one model (e.g. ONNX or Treelite), which the plan postponed.
+- **`/predict` p95 under load:** about 25 ms of CPU-bound Python per request. With concurrent requests, they queue for the CPU (and for each process's interpreter lock). It stays under 50 ms one request at a time.
+- **First explanation:** the first explanation in each API process builds the SHAP explainers (2–5 s), so p99 is a few seconds.
+
 ## Configuration
 
 All experiment parameters are controlled via [`configs/config.yaml`](configs/config.yaml):
@@ -698,3 +895,4 @@ All experiment parameters are controlled via [`configs/config.yaml`](configs/con
 - `requirements.txt`: training pipeline (PyTorch with CUDA, Optuna, SHAP, …); it includes `requirements/api.txt`
 - `requirements/api.txt`: model serving + web backend. It pins scikit-learn and XGBoost to the versions model bundles are built with.
 - `requirements/test.txt`: `api.txt` plus pytest
+- `requirements/dev.txt`: `test.txt` plus ruff (lint, `ruff.toml`) and locust (load test)

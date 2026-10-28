@@ -10,7 +10,6 @@ from tqdm import tqdm
 from sklearn.utils.class_weight import compute_sample_weight
 
 
-from src.data.split_data import _get_feature_columns
 from src.preprocessing.feature_selection import build_feature_selector
 from src.preprocessing.build_preprocessor import build_preprocessor
 from src.preprocessing.artifacts import get_fs_profile, preprocessing_artifact_paths

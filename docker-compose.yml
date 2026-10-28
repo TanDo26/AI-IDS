@@ -1,24 +1,28 @@
+x-app-env: &app-env
+  IDS_ENV: ${IDS_ENV:-development}
+  IDS_SECRET_KEY: ${IDS_SECRET_KEY:-dev-only-insecure-secret-key-do-not-use-in-production}
+  IDS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ids}:${POSTGRES_PASSWORD:-ids}@postgres:5432/${POSTGRES_DB:-ids}
+  IDS_REDIS_URL: redis://redis:6379/0
+  IDS_MODEL_STORE: /app/model_store
+  IDS_DATA_DIR: /data
+  IDS_MAX_UPLOAD_MB: ${IDS_MAX_UPLOAD_MB:-100}
+  IDS_RETENTION_DAYS: ${IDS_RETENTION_DAYS:-30}
+  IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-true}
+  IDS_MODEL_POLL_SECONDS: ${IDS_MODEL_POLL_SECONDS:-30}
+  IDS_COOKIE_SECURE: ${IDS_COOKIE_SECURE:-true}
+  IDS_DISK_WARNING_PERCENT: ${IDS_DISK_WARNING_PERCENT:-85}
+  IDS_LOG_FORMAT: ${IDS_LOG_FORMAT:-json}       # one JSON object per line, with request / task ids
+  IDS_LOG_LEVEL: ${IDS_LOG_LEVEL:-INFO}
+  # The api runs several uvicorn workers: /metrics sums their HTTP metrics through this directory
+  PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+
 x-app: &app
   build:
     context: .
     dockerfile: docker/api.Dockerfile
   image: ai-ids-api
   profiles: [app]
-  environment:
-    IDS_ENV: ${IDS_ENV:-development}
-    IDS_SECRET_KEY: ${IDS_SECRET_KEY:-dev-only-insecure-secret-key-do-not-use-in-production}
-    IDS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ids}:${POSTGRES_PASSWORD:-ids}@postgres:5432/${POSTGRES_DB:-ids}
-    IDS_REDIS_URL: redis://redis:6379/0
-    IDS_MODEL_STORE: /app/model_store
-    IDS_DATA_DIR: /data
-    IDS_MAX_UPLOAD_MB: ${IDS_MAX_UPLOAD_MB:-100}
-    IDS_RETENTION_DAYS: ${IDS_RETENTION_DAYS:-30}
-    IDS_ENABLE_PCAP: ${IDS_ENABLE_PCAP:-true}
-    IDS_MODEL_POLL_SECONDS: ${IDS_MODEL_POLL_SECONDS:-30}
-    IDS_COOKIE_SECURE: ${IDS_COOKIE_SECURE:-true}
-    IDS_DISK_WARNING_PERCENT: ${IDS_DISK_WARNING_PERCENT:-85}
-    # The api runs 2 uvicorn workers: /metrics sums their HTTP metrics through this directory
-    PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+  environment: *app-env
   volumes:
     - ./model_store:/app/model_store:ro    # bundles are built on the training machine
     - appdata:/data                        # uploads/ and results/
@@ -126,6 +130,14 @@ services:
 
   api:
     <<: *app
+    environment:
+      <<: *app-env
+      # uvicorn processes (~370 MB each with a bundle loaded). Under load, 4 kept explanations
+      # within target where 2 didn't (README "Load test"); 2 on a machine short of memory
+      WEB_CONCURRENCY: ${IDS_API_WORKERS:-4}
+      # One OpenMP thread per request: concurrent requests each opening a team of 8 threads
+      # oversubscribed the CPUs. The worker keeps every core for its 50k-flow batches
+      OMP_NUM_THREADS: "1"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -146,6 +158,13 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      # This container's worker answers through the broker (about 2 s of CPU, hence the long interval)
+      test: ["CMD-SHELL", "celery -A src.api.worker.celery_app:celery_app inspect ping -d celery@$$HOSTNAME --timeout 10 >/dev/null"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 
   # Schedules the daily retention job (exactly one beat per deployment)
@@ -156,6 +175,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      # Beat only needs the broker; if its process dies, so does the container
+      test: ["CMD", "python", "-c", "import os, redis; redis.Redis.from_url(os.environ['IDS_REDIS_URL'], socket_timeout=5).ping()"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   # Next.js frontend (web/); Caddy sends every non-/api path here
@@ -172,10 +197,12 @@ services:
     restart: unless-stopped
 
   proxy:
-    image: caddy:2-alpine
+    image: caddy:2.11-alpine
     profiles: [app]
     ports:
-      - "8080:80"
+      # This machine only by default: visitors come through the tunnel, which runs inside the
+      # Docker network. IDS_HTTP_PORT=8080 would listen on every interface.
+      - "${IDS_HTTP_PORT:-127.0.0.1:8080}:80"
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddydata:/data
@@ -183,6 +210,64 @@ services:
       api:
         condition: service_healthy
       web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  # Nightly pg_dump into ./backups, newest BACKUP_KEEP kept (docker/backup.sh, README "Backups").
+  # An extra one now: docker compose exec backup sh /backup.sh now   (Git Bash: MSYS_NO_PATHCONV=1)
+  backup:
+    image: postgres:16-alpine
+    profiles: [app]
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-ids}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-ids}
+      PGDATABASE: ${POSTGRES_DB:-ids}
+      BACKUP_HOUR: ${BACKUP_HOUR:-2}          # UTC
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+    volumes:
+      - ./docker/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      migrate:                                # or the first dump is of an empty database
+        condition: service_completed_successfully
+    healthcheck:
+      # Unhealthy when the loop stopped or the last dump failed
+      test: ["CMD-SHELL", "find /tmp/backup-alive -mmin -10 | grep -q . && test ! -e /tmp/backup-failed"]
+      interval: 60s
+      timeout: 5s
+      retries: 2
+    restart: unless-stopped
+
+  # ── tunnel ───────────────────────────────────────────────
+  # Cloudflare Tunnel to proxy:80 (README "Publishing with Cloudflare Tunnel"); no inbound ports.
+  # Named tunnel with a stable hostname; its public hostname points at http://proxy:80:
+  #   docker compose --profile app --profile tunnel up -d
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.0
+    profiles: [tunnel]
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}    # from the dashboard; never commit it
+    depends_on:
+      proxy:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Quick tunnel for a short demo: no account or domain, a new https://*.trycloudflare.com address
+  # at every start (docker compose logs quick-tunnel | grep trycloudflare)
+  quick-tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    profiles: [quick-tunnel]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://proxy:80"]
+    depends_on:
+      proxy:
         condition: service_healthy
     restart: unless-stopped
 
@@ -204,6 +289,30 @@ services:
       E2E_FLOWS_CSV: ${E2E_FLOWS_CSV:-e2e/data/flows.csv}
       E2E_CAPTURE: ${E2E_CAPTURE:-e2e/data/capture.pcap}
     command: ["sh", "-c", "npm ci --no-audit --no-fund --loglevel=error && npx playwright test"]
+
+  # Load test of the running app stack (loadtest/locustfile.py, README "Load test"); from inside the
+  # network, through Caddy:
+  #   LOADTEST_EMAIL=... LOADTEST_PASSWORD=... docker compose --profile app --profile loadtest run --rm locust
+  locust:
+    image: locustio/locust:2.46.7
+    profiles: [loadtest]
+    working_dir: /mnt/locust
+    volumes:
+      - ./loadtest:/mnt/locust:ro
+      - ./web/e2e/data:/mnt/data:ro       # flows.csv from scripts/make_sample_upload.py
+    environment:
+      LOADTEST_EMAIL: ${LOADTEST_EMAIL:-}
+      LOADTEST_PASSWORD: ${LOADTEST_PASSWORD:-}
+      LOADTEST_FLOWS: /mnt/data/${LOADTEST_FLOWS:-flows.csv}
+      LOADTEST_CAPTURE: ${LOADTEST_CAPTURE:+/mnt/data/${LOADTEST_CAPTURE}}
+      # Locust's own options; arguments after `run --rm locust` (e.g. --users 50) override them
+      LOCUST_LOCUSTFILE: /mnt/locust/locustfile.py
+      LOCUST_HOST: http://proxy
+      LOCUST_HEADLESS: "true"
+      LOCUST_USERS: "20"
+      LOCUST_SPAWN_RATE: "5"
+      LOCUST_RUN_TIME: 2m
+      LOCUST_ONLY_SUMMARY: "true"
 
   # ── test ─────────────────────────────────────────────────
   # Throwaway Postgres + Redis for pytest; data lives in tmpfs, ports only on 127.0.0.1

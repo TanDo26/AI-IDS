@@ -17,6 +17,7 @@ from sklearn.utils.class_weight import compute_sample_weight
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.pipeline_config import config_path
 from src.training.train import load_split, fit_preprocessing, TORCH_MODELS, SAMPLE_WEIGHT_MODELS
 from src.imbalance.smote import apply_smote
 from src.imbalance.undersampling import apply_undersampling
@@ -145,7 +146,7 @@ def run_fold(config, spec, data, train_mask, unseen_labels, benign, names, subsa
 
 
 def main(args):
-    with open(PROJECT_ROOT / "configs" / "config.yaml", "r", encoding="utf-8") as f:
+    with open(config_path(), "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
     ds_cfg = config["datasets"][config["active_dataset"]]
     with open(Path(ds_cfg["data_dir"]) / "label_mapping.json", "r", encoding="utf-8") as f:

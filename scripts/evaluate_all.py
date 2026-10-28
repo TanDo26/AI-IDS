@@ -14,8 +14,8 @@ import yaml
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.pipeline_config import config_path
 from src.training.train import load_split
-from src.preprocessing.feature_selection import FeatureSelector
 from src.preprocessing.artifacts import get_fs_profile, preprocessing_artifact_paths
 from src.evaluation.evaluate import evaluate_experiment
 from src.evaluation.plots import plot_confusion_matrix, plot_pr_curve
@@ -23,8 +23,7 @@ from scripts.train_all import parse_exp_filter, filter_experiments
 
 
 def main(exp_filter=None):
-    config_path = PROJECT_ROOT / "configs" / "config.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path(), "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     experiments = filter_experiments(config["experiments"], exp_filter)

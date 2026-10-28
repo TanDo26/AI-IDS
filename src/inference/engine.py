@@ -48,12 +48,19 @@ class InferenceEngine:
         if missing:
             raise MissingFeaturesError(missing)
 
-        features = df[self.required].apply(pd.to_numeric, errors="coerce")
+        features = df[self.required]
+        # Text columns: numbers or NaN. Only those, since pandas' per-column work costs ~0.5 ms a column
+        text = [c for c, dtype in features.dtypes.items() if not pd.api.types.is_numeric_dtype(dtype)]
+        if text:
+            features = features.assign(**{c: pd.to_numeric(features[c], errors="coerce") for c in text})
+        # float64 here, as the preprocessor would make it anyway
+        values = features.to_numpy(dtype=np.float64, na_value=np.nan, copy=True)   # a view may be read-only
         # Zero-duration flows produce inf rates; training data had them removed, the imputer handles NaN
-        features = features.replace([np.inf, -np.inf], np.nan).reset_index(drop=True)
+        values[np.isinf(values)] = np.nan
+        features = pd.DataFrame(values, columns=self.required)
         metadata = df[[c for c in METADATA_COLUMNS if c in df.columns]].reset_index(drop=True)
         label = df[LABEL_COLUMN].reset_index(drop=True) if LABEL_COLUMN in df.columns else None
-        return PreparedFlows(features, metadata, label, features.isna().sum(axis=1).to_numpy(), renamed)
+        return PreparedFlows(features, metadata, label, np.isnan(values).sum(axis=1), renamed)
 
     def predict(self, df: pd.DataFrame) -> pd.DataFrame:
         """Metadata columns + decision, reason, predicted_class, class_name, scores, imputed_cells."""

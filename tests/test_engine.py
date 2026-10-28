@@ -5,9 +5,10 @@ Column-name normalisation, the inference engine, and the open-set decision rule.
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.ensemble import IsolationForest
 
 from src.inference.engine import InferenceEngine, MissingFeaturesError
-from src.inference.open_set import decide, known_thresholds
+from src.inference.open_set import anomaly_scores, decide, known_thresholds
 from src.inference.schema import normalize_columns
 from tests.tiny_bundle import BENIGN, CANONICAL_FLOWS, DDOS, PORTSCAN, flow
 
@@ -29,6 +30,20 @@ def test_decide_covers_every_reason():
     np.testing.assert_allclose(r["confidence"], [0.9, 0.9, 0.95, 0.6])
     np.testing.assert_allclose(r["attack_score"], 1 - proba[:, 0])
     np.testing.assert_allclose(r["anomaly_score"], anomaly)
+
+
+@pytest.mark.parametrize("max_features", [1.0, 0.5])
+def test_isolation_scores_are_scikit_learns(max_features):
+    # anomaly_scores() bypasses score_samples' per-tree overhead; the result must not change
+    rng = np.random.default_rng(1)
+    X_fit, X = rng.normal(size=(500, 6)), rng.normal(scale=2.0, size=(300, 6))
+    X[0, 2] = np.nan                                   # trees send missing values down one side
+    forest = IsolationForest(n_estimators=30, max_samples=64, max_features=max_features,
+                             random_state=0).fit(X_fit)
+    expected = -forest.score_samples(X)
+    assert np.array_equal(anomaly_scores(forest, X), expected)
+    assert np.array_equal(anomaly_scores(forest, X[:1]), expected[:1])
+    assert np.array_equal(anomaly_scores(forest, X.astype(np.float32)), expected)
 
 
 def test_decide_with_per_class_thresholds():

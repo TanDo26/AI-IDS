@@ -7,6 +7,7 @@ configs/config.yaml stays ML-only; everything about the running service lives he
 import warnings
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -32,6 +33,8 @@ class Settings(BaseSettings):
 
     disk_warning_percent: int = 85                   # /admin/server warns above this data-volume usage
     metrics_enabled: bool = True                     # GET /metrics for Prometheus (Caddy doesn't route it)
+    log_format: Literal["text", "json"] = "text"     # json in the containers (src/api/logs.py)
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     max_upload_mb: int = 100                         # Cloudflare Free caps request bodies at 100 MB
     retention_days: int = 30

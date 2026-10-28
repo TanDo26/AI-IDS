@@ -23,13 +23,14 @@ from sklearn.utils.class_weight import compute_sample_weight
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.pipeline_config import config_path
 from src.training.train import prepare_data, SAMPLE_WEIGHT_MODELS
 from src.preprocessing.artifacts import get_fs_profile
 from src.imbalance.smote import apply_smote
 from src.imbalance.undersampling import apply_undersampling
 from src.models.registry import get_model
 
-CONFIG_PATH = PROJECT_ROOT / "configs" / "config.yaml"
+CONFIG_PATH = config_path()
 
 # ──────────────────────────────────────────────
 # Search spaces per model (Optuna parameter names)

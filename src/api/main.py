@@ -2,6 +2,7 @@
 AI-IDS web API: app factory, middleware, routers, lifespan.
 """
 
+import logging
 import re
 import time
 import uuid
@@ -9,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 
-from src.api import health, metrics
+from src.api import health, logs, metrics
 from src.api.admin import router as admin
 from src.api.auth import router as auth
 from src.api.inference import router as inference
@@ -21,6 +22,10 @@ from src.api.uploads import router as uploads
 
 API_PREFIX = "/api/v1"
 _REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+# Polled every few seconds by healthchecks and Prometheus: logged at DEBUG only
+QUIET_PATHS = {f"{API_PREFIX}/healthz", f"{API_PREFIX}/readyz", "/metrics"}
+
+access_log = logging.getLogger("ids.access")
 
 
 @asynccontextmanager
@@ -37,6 +42,9 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # Here rather than in the lifespan: each uvicorn worker imports the app before it logs its start
+    settings = get_settings()
+    logs.configure_logging(settings.log_format, settings.log_level)
     app = FastAPI(
         title="AI-IDS",
         version="3.0.0",
@@ -53,9 +61,29 @@ def create_app() -> FastAPI:
         incoming = request.headers.get("X-Request-ID", "")
         rid = incoming if _REQUEST_ID.fullmatch(incoming) else uuid.uuid4().hex
         request.state.request_id = rid
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = rid
-        return response
+        token = logs.request_id.set(rid)        # every log record of this request carries it
+        start, status = time.perf_counter(), 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            response.headers["X-Request-ID"] = rid
+            # Responses hold one user's data; never let a browser or Cloudflare keep a copy
+            # (Cloudflare caches *.csv by default, export.csv included)
+            response.headers.setdefault("Cache-Control", "no-store")
+            return response
+        except Exception:
+            # Logged here too, because uvicorn's own log of it comes without the request id
+            logging.getLogger("ids.error").exception("Unhandled error in %s %s", request.method, request.url.path)
+            raise
+        finally:
+            path = request.url.path
+            access_log.log(logging.DEBUG if path in QUIET_PATHS else logging.INFO,
+                           "%s %s %s", request.method, path, status, extra={
+                               "method": request.method, "path": path, "status": status,
+                               "duration_ms": round((time.perf_counter() - start) * 1000, 1),
+                               "client": request.client.host if request.client else None,
+                               "user_id": getattr(request.state, "user_id", None)})
+            logs.request_id.reset(token)
 
     @app.middleware("http")
     async def http_metrics(request: Request, call_next):

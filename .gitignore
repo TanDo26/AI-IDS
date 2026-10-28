@@ -51,6 +51,7 @@ desktop.ini
 /results/
 /model_store/
 /data/
+/backups/
 
 # ============================================================
 # Docker / secrets

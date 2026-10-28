@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.pipeline_config import config_path
 from src.training.train import prepare_data
 from src.preprocessing.artifacts import get_fs_profile
 from src.models.label_encoded import LabelEncodedClassifier
@@ -168,8 +169,7 @@ def export_top_features(shap_values, feature_names, output_path, top_n=20):
 
 
 def main(exp_name, model_type, split_name, label_type, n_samples, fs_profile="none"):
-    config_path = PROJECT_ROOT / "configs" / "config.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path(), "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     print("=" * 60)
@@ -257,8 +257,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Auto-resolve from experiment config
-    config_path = PROJECT_ROOT / "configs" / "config.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path(), "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     # Parse filter and handle single exp format like "EXP-02" or just "2"

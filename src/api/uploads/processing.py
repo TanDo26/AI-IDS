@@ -39,7 +39,7 @@ from src.api.uploads.service import raw_path, results_dir
 from src.flowmeter import CaptureError, flow_batches
 from src.inference.engine import InferenceEngine
 from src.inference.manager import ModelManager
-from src.inference.schema import LABEL_COLUMN, METADATA_COLUMNS
+from src.inference.schema import LABEL_COLUMN
 
 log = logging.getLogger(__name__)
 
