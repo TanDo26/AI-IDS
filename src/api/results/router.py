@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from src.api.auth.deps import get_current_user
+from src.api.auth.deps import get_verified_user
 from src.api.db.models import ModelVersion, Upload, User
 from src.api.db.session import get_db
 from src.api.results import service
@@ -43,7 +43,7 @@ def _version(db: Session, upload: Upload) -> ModelVersion | None:
 
 
 @router.get("/{upload_id}/summary", response_model=SummaryOut)
-def summary(upload_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def summary(upload_id: uuid.UUID, user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """Decision counts, known attacks per type, unknowns per reason, and the model that produced them."""
     upload, path = _completed(db, upload_id, user)
     s, version = upload.summary, _version(db, upload)
@@ -62,7 +62,7 @@ def summary(upload_id: uuid.UUID, user: User = Depends(get_current_user), db: Se
 def flows(upload_id: uuid.UUID, page: int = Query(1, ge=1), size: int = Query(50, ge=1, le=500),
           decision: Decision | None = None, class_name: str | None = Query(None, max_length=128),
           sort: str = Query("row", pattern=SORT_PATTERN, description="A column, '-' first for descending"),
-          user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+          user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """One page of flows with their predictions, optionally filtered by decision and/or class."""
     _, path = _completed(db, upload_id, user)
     items, total = service.flows_page(path, page, size, decision, class_name, sort)
@@ -71,7 +71,7 @@ def flows(upload_id: uuid.UUID, page: int = Query(1, ge=1), size: int = Query(50
 
 @router.get("/{upload_id}/flows/{row}/explain", response_model=ExplanationOut)
 def explain(request: Request, upload_id: uuid.UUID, row: int = Path(ge=0),
-            user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+            user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """Which features drove this flow's decision, computed with the bundle that produced it."""
     upload, path = _completed(db, upload_id, user)
     version = _version(db, upload)
@@ -102,7 +102,7 @@ def _download_name(upload: Upload) -> str:
 def export_csv(upload_id: uuid.UUID, decision: Decision | None = None,
                class_name: str | None = Query(None, max_length=128),
                features: bool = Query(False, description="Also include the model input features"),
-               user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+               user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """Download the results as CSV: row, metadata, Label, predictions (and optionally features)."""
     upload, path = _completed(db, upload_id, user)
     return StreamingResponse(service.export_csv(path, decision, class_name, features), media_type="text/csv",

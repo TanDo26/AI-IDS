@@ -5,9 +5,10 @@ Request / response models for /admin.
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from src.api.db.models import ModelVersion
+from src.api.settings import get_settings
 from src.api.uploads.schemas import UploadOut
 
 Role = Literal["user", "admin"]
@@ -110,6 +111,13 @@ class UserAdminOut(BaseModel):
     is_active: bool
     created_at: datetime
     last_login_at: datetime | None
+    email_verified_at: datetime | None
+
+    @computed_field
+    @property
+    def needs_email_verification(self) -> bool:
+        """The user can't use the app until they confirm their address (IDS_EMAIL_VERIFICATION)."""
+        return get_settings().email_verification and self.email_verified_at is None
 
 
 class UserPage(BaseModel):

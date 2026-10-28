@@ -10,7 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
-from src.api.auth.deps import get_current_user
+from src.api.auth.deps import get_verified_user
 from src.api.db.models import User
 from src.api.db.session import get_db, get_sessionmaker
 from src.api.ratelimit import UPLOADS_PER_USER, rate_limit
@@ -48,7 +48,7 @@ def _admit(request: Request, user: User):
 
 
 @router.post("", response_model=UploadOut, status_code=201)
-async def create_upload(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_upload(request: Request, user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """multipart/form-data with one file in the field `file`: a CSV exported by CICFlowMeter, or a
     pcap / pcapng capture (unless IDS_ENABLE_PCAP=false). The type is read from the file's content."""
     # No body parameters: FastAPI hasn't read the body yet, so these checks run before it arrives
@@ -76,7 +76,7 @@ async def create_upload(request: Request, user: User = Depends(get_current_user)
 @router.get("", response_model=UploadPage)
 def list_uploads(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
                  status: UploadStatus | None = None,
-                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+                 user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """Your uploads, newest first."""
     items, total = service.list_uploads(db, user.id, page, size, status)
     return UploadPage(items=items, total=total, page=page, size=size)
@@ -84,13 +84,13 @@ def list_uploads(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100)
 
 # Before /{upload_id}: otherwise "stats" would be parsed (and rejected) as an upload id
 @router.get("/stats", response_model=UploadTotals)
-def upload_stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def upload_stats(user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """Your totals: uploads per status, bytes, flows, known attacks and unknowns found."""
     return service.upload_stats(db, user.id)
 
 
 @router.get("/{upload_id}", response_model=UploadOut)
-def get_upload(upload_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_upload(upload_id: uuid.UUID, user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """Status, progress and error of one upload (owner or admin)."""
     try:
         return service.get_upload(db, upload_id, user)
@@ -99,7 +99,7 @@ def get_upload(upload_id: uuid.UUID, user: User = Depends(get_current_user), db:
 
 
 @router.delete("/{upload_id}", status_code=204)
-def delete_upload(upload_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_upload(upload_id: uuid.UUID, user: User = Depends(get_verified_user), db: Session = Depends(get_db)):
     """Delete the file and its results (owner or admin). The upload still counts in usage totals."""
     try:
         upload = service.get_upload(db, upload_id, user)

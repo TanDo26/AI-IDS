@@ -5,9 +5,10 @@ Request / response models for /auth.
 import re
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from src.api.auth.security import validate_password
+from src.api.settings import get_settings
 
 _EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 _USERNAME = re.compile(r"[A-Za-z0-9_.-]{3,64}")
@@ -76,6 +77,25 @@ class UserOut(BaseModel):
     is_active: bool
     created_at: datetime
     last_login_at: datetime | None
+    email_verified_at: datetime | None
+
+    @computed_field
+    @property
+    def needs_email_verification(self) -> bool:
+        """True while IDS_EMAIL_VERIFICATION is on and the address isn't confirmed: the app is closed."""
+        return get_settings().email_verification and self.email_verified_at is None
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+
+
+class VerifyEmailResponse(BaseModel):
+    email: str
+
+
+class VerificationSent(BaseModel):
+    sent_to: str
 
 
 class TokenResponse(BaseModel):

@@ -52,6 +52,7 @@
           "auth"
         ],
         "summary": "Signup",
+        "description": "Creates the account and signs it in. With email verification on, a link goes to the address and\nthe app stays closed (403) until it is opened.",
         "operationId": "signup_api_v1_auth_signup_post",
         "requestBody": {
           "content": {
@@ -80,6 +81,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify Email",
+        "description": "Confirms the address of the link's account. No session needed: the link may open on another device.",
+        "operationId": "verify_email_api_v1_auth_verify_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyEmailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verify-email/resend": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Resend Verification",
+        "description": "A new link for the signed-in user; earlier ones stop working.",
+        "operationId": "resend_verification_api_v1_auth_verify_email_resend_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationSent"
                 }
               }
             }
@@ -3849,6 +3914,24 @@
               }
             ],
             "title": "Last Login At"
+          },
+          "email_verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Verified At"
+          },
+          "needs_email_verification": {
+            "type": "boolean",
+            "title": "Needs Email Verification",
+            "description": "The user can't use the app until they confirm their address (IDS_EMAIL_VERIFICATION).",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -3859,7 +3942,9 @@
           "role",
           "is_active",
           "created_at",
-          "last_login_at"
+          "last_login_at",
+          "email_verified_at",
+          "needs_email_verification"
         ],
         "title": "UserAdminOut"
       },
@@ -3901,6 +3986,24 @@
               }
             ],
             "title": "Last Login At"
+          },
+          "email_verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Verified At"
+          },
+          "needs_email_verification": {
+            "type": "boolean",
+            "title": "Needs Email Verification",
+            "description": "True while IDS_EMAIL_VERIFICATION is on and the address isn't confirmed: the app is closed.",
+            "readOnly": true
           }
         },
         "type": "object",
@@ -3911,7 +4014,9 @@
           "role",
           "is_active",
           "created_at",
-          "last_login_at"
+          "last_login_at",
+          "email_verified_at",
+          "needs_email_verification"
         ],
         "title": "UserOut"
       },
@@ -4017,6 +4122,47 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerificationSent": {
+        "properties": {
+          "sent_to": {
+            "type": "string",
+            "title": "Sent To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sent_to"
+        ],
+        "title": "VerificationSent"
+      },
+      "VerifyEmailRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "VerifyEmailRequest"
+      },
+      "VerifyEmailResponse": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "VerifyEmailResponse"
       }
     }
   }

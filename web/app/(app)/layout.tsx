@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { useLogout, useMe } from "@/lib/auth";
 
+import { ConfirmEmail } from "./ConfirmEmail";
+
 // An upload's results open from /uploads; admin sections have their own tabs under /admin
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -39,6 +41,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+  // Signed in, but the email address isn't confirmed yet: the API refuses everything else (403)
+  if (user.needs_email_verification) return <ConfirmEmail user={user} />;
 
   return (
     <div className="min-h-screen">

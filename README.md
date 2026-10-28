@@ -449,7 +449,8 @@ training machine.
 | `GET` | `/readyz` | Readiness: database, Redis, active model |
 | `POST` | `/auth/signup`, `/auth/login` | Create an account / log in (sets cookies, returns an access token) |
 | `POST` | `/auth/refresh`, `/auth/logout`, `/auth/password` | Session management |
-| `GET` | `/auth/me` | Current user |
+| `GET` | `/auth/me` | Current user (`needs_email_verification` while the app is closed to them) |
+| `POST` | `/auth/verify-email`, `/auth/verify-email/resend` | Confirm an address with the emailed token (no session needed) / send a new link |
 | `POST` | `/predict` | One flow → `benign` / `known_attack` / `unknown`, attack type, scores (login required) |
 | `POST` | `/batch_predict` | Up to 10,000 flows (login required) |
 | `POST` | `/uploads` | Upload a CICFlowMeter CSV or a pcap / pcapng capture as multipart field `file` (≤ 100 MB) and queue it for processing. The type is read from the content; a CSV's missing features are listed at once. `IDS_ENABLE_PCAP=false` turns captures off. |
@@ -602,14 +603,40 @@ docker compose exec api python scripts/manage_models.py --db activate <bundle_id
 ```
 
 Open **http://localhost:8080** and sign in. New users create an account at `/signup` (they get the `user` role).
-For a file to try, `python scripts/make_sample_upload.py --out sample.csv` writes 2,524 real flows of the test split (every attack type, with a `Label` column).
+For a file to try, `python scripts/make_sample_upload.py --out sample.csv` writes 2,524 real flows of the test split (every attack type). Like real traffic, it has no `Label` column. The page shows only what the model decided, and ignores a `Label` column in an uploaded file.
+
+**Test uploads.** `scripts/make_test_uploads.py` writes several files of chosen classes, each holding flows of one class, plus `manifest.csv` naming each file's class. It writes CICFlowMeter CSVs or pcap / pcapng captures, into `test_uploads/` (git-ignored):
+
+```bash
+python scripts/make_test_uploads.py DDoS=3 Portscan=2 Benign=1                  # 6 CSVs of 200 flows
+python scripts/make_test_uploads.py "DoS Hulk=2" ssh-patator=1 --format pcap --flows 100
+python scripts/make_test_uploads.py all=1 --format pcapng --only-matching       # one file per class
+```
+
+- **Where the flows come from:** held-out rows (test + validation) of the `random` split, which EXP-59 never trained on. Class names match loosely (`dos-hulk`, `DoS Hulk`, or the id `4`).
+- **No answers in the files:** a file holds only what the model reads, as real traffic would, with no `Label` column. Only `manifest.csv` says which class each file holds.
+- **CSV:** the rows' features, under the Java CICFlowMeter's column names, with made-up endpoints.
+- **Captures:** each row is rebuilt as packets that the flow extractor reads back as the same flow:
+  - packet counts, payload sizes, timing, TCP flags, header sizes and windows;
+  - the Java CICFlowMeter reads these captures exactly like `src/flowmeter` does (checked: 82/82 features on every flow);
+  - left out: flows over 5,000 packets, and rows that continue a connection split by the 120 s timeout;
+  - a capture stops before the 100 MB upload limit.
+- **Checking the files:** each file is read back the way the server reads an upload and predicted with the newest bundle in `model_store/` (`--bundle` picks another one, `--bundle none` skips the check).
+
+  | `manifest.csv` column | Meaning |
+  |---|---|
+  | `predicted_as_class` / `match_rate` | How many flows the model put in the file's class |
+  | `decisions` | The decision counts the results page will show (benign / unknown / known_attack) |
+  | `unique_rows` | Distinct source rows. Rare classes (Heartbleed, Infiltration, the web attacks) have only a few, so their rows repeat |
+
+- **`--only-matching`:** keeps only the flows the model puts in their class.
 
 | Page | What it shows |
 |---|---|
 | `/dashboard` | Your totals (uploads, flows analysed, known attacks, unknowns, data uploaded), a quick upload area and the recent uploads |
 | `/uploads/new` | Drag and drop a CICFlowMeter CSV (≤ 100 MB, checked before sending) with transfer progress. A CSV missing features the active model needs is refused with the list. After sending, you land on the upload's results page |
 | `/uploads` | Your uploads with live status while they're analysed; filter by status; delete. The file name opens its results |
-| `/uploads/[id]` | Live progress while it's analysed, then the results: benign / unknown / known-attack counts (unknowns split into low confidence and anomalous), known attacks per type, the model used and the agreement with the file's `Label`, and every flow in a table you can filter by decision or class, sort and page through. Clicking a count or a bar filters the table. Download the flows as CSV, optionally with the model's input features. Click a flow to open its explanation: the reason in one line, and the 15 features that pushed the decision most, as bars toward or away from the class (red toward an attack, blue toward benign). An unknown flow shows the two classes the model hesitated between, or how far each unusual feature is from normal traffic |
+| `/uploads/[id]` | Live progress while it's analysed, then the results: benign / unknown / known-attack counts (unknowns split into low confidence and anomalous), known attacks per type, the model used, and every flow in a table you can filter by decision or class, sort and page through. Clicking a count or a bar filters the table. Download the flows as CSV, optionally with the model's input features. Click a flow to open its explanation: the reason in one line, and the 15 features that pushed the decision most, as bars toward or away from the class (red toward an attack, blue toward benign). An unknown flow shows the two classes the model hesitated between, or how far each unusual feature is from normal traffic |
 | `/account` | Profile and password change |
 | `/admin` (admins) | Server status, refreshed every 5 s: problems in plain words, API / database / Redis / workers, CPU, memory and disk, the job queue and uploads by status, and which model this process serves |
 | `/admin/models` (admins) | Every registered bundle side by side (macro-F1, attack recall, false alarms, unknown rates, latency, throughput; the best of each in bold), Rescan `model_store/`, Activate or Roll back after a confirmation, and the version each API and worker process has loaded |
@@ -709,6 +736,7 @@ In `.env` (from `.env.example`), before the first start:
 | `POSTGRES_PASSWORD` | Set it before the first start. The database volume keeps the password it was created with, so changing it later also needs `ALTER USER` inside Postgres |
 | `IDS_ENABLE_PCAP` | Leave it out (default `true`), or capture uploads are refused |
 | `CLOUDFLARE_TUNNEL_TOKEN` | For the named tunnel (below) |
+| `IDS_EMAIL_VERIFICATION`, `IDS_SMTP_*` | Optional: new accounts confirm their email address ("Email verification" below) |
 
 ```bash
 docker compose --profile app up -d --build
@@ -752,6 +780,60 @@ Commands that name `cloudflared` or `quick-tunnel` need both profiles, as above.
   - The hashed files under `/_next/static/` stay cacheable for a year.
   - Leave Cloudflare's default caching as it is (no "Cache Everything" rule).
 - **Upload size:** uploads over 100 MB are refused before they reach the API (Cloudflare Free's limit is the same).
+
+### Email verification
+
+With `IDS_EMAIL_VERIFICATION=true`, a new account gets an email with a link, and can't use the app until the link is opened. The feature is off by default.
+
+**How it works:**
+- **Signing up still signs in.** Until the link is opened, the app shows only "Confirm your email address", with **Send a new link** and **Sign out**. The API answers 403 to uploads, results, `/predict` and the admin pages.
+- **The link** opens `/verify-email`:
+  - it works for 24 hours (`IDS_EMAIL_TOKEN_HOURS`);
+  - it needs no session, so it also works on another device;
+  - opening it twice does no harm;
+  - a new link replaces the earlier ones, and a user can ask for at most 3 an hour.
+- **The waiting page goes on by itself** once the link has been opened somewhere else: it asks the API again every 5 seconds.
+- **Existing accounts count as confirmed:** accounts that existed before migration 0004, and admins made with `create_admin.py`.
+- **Admins see who hasn't confirmed:** "Email not confirmed" in the users list.
+- **Nobody can block an address by registering it first.** An email or username is released when someone signs up with it, if the account holding it:
+  - never confirmed its address;
+  - is older than a link's lifetime;
+  - has no uploads.
+
+  The old account is removed, and the audit log records it as "Unconfirmed account removed".
+
+**Settings** in `.env`:
+
+| Setting | Gmail | Resend | Mailpit (testing) |
+|---|---|---|---|
+| `IDS_MAIL_BACKEND` | `smtp` | `smtp` | `smtp` |
+| `IDS_SMTP_HOST` | `smtp.gmail.com` | `smtp.resend.com` | `mailpit` |
+| `IDS_SMTP_PORT` | `587` | `587` | `1025` |
+| `IDS_SMTP_SECURITY` | `starttls` | `starttls` | `none` |
+| `IDS_SMTP_USERNAME` | your Gmail address | `resend` | (none) |
+| `IDS_SMTP_PASSWORD` | an app password | the API key | (none) |
+| `IDS_MAIL_FROM` | `AI-IDS <you@gmail.com>` | an address on your verified domain | anything |
+
+**Mail providers:**
+- **Gmail:**
+  - Turn on 2-Step Verification for the account.
+  - Create an app password at https://myaccount.google.com/apppasswords and use its 16 letters, without the spaces, as `IDS_SMTP_PASSWORD`. The account's normal password doesn't work.
+  - Gmail sends about 500 emails a day.
+- **Resend:** the free plan sends 100 emails a day, but only from a domain you have verified there with DNS records, such as the named tunnel's domain.
+- **Mailpit:** it keeps every email on this machine and shows them at http://127.0.0.1:8025; nothing is delivered. Start it with the stack:
+
+```bash
+docker compose --profile app --profile mail up -d     # with the Mailpit column above and IDS_EMAIL_VERIFICATION=true
+```
+
+**Notes:**
+- **`IDS_PUBLIC_URL`** (e.g. `https://ids.example.com`) is the base of the links.
+  - Empty: links use the address the visitor signed up on, which suits the changing quick-tunnel address.
+  - Set it once the site is reachable other than through the tunnel. Otherwise a forged `Host` header could put another site's address in the email.
+- **Production needs SMTP:** with `IDS_ENV=production`, the API refuses to start when verification is on but no SMTP server is set.
+- **Development without SMTP:** `IDS_MAIL_BACKEND=console` writes each email, link included, to the api log (`docker compose logs api | grep verify-email`).
+- **Delivery failures:** mail goes out after the response. If the SMTP server fails, the api log has `Could not send email`, and the user can send a new link.
+- **Browser smoke test:** with verification on, it reads the sign-up link from Mailpit, so start Mailpit too (`E2E_MAILPIT_URL`, default `http://mailpit:8025`).
 
 ### Logs
 

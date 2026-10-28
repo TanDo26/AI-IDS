@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from src.api.auth import security
 from src.api.db.models import User
 from src.api.db.session import get_db
+from src.api.settings import get_settings
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -49,7 +50,14 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     return user
 
 
-def require_admin(user: User = Depends(get_current_user)) -> User:
+def get_verified_user(user: User = Depends(get_current_user)) -> User:
+    """get_current_user, whose email address is confirmed when IDS_EMAIL_VERIFICATION is on."""
+    if get_settings().email_verification and user.email_verified_at is None:
+        raise HTTPException(status_code=403, detail="Confirm your email address first: open the link we sent you")
+    return user
+
+
+def require_admin(user: User = Depends(get_verified_user)) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     return user

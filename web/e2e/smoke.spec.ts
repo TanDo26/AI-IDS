@@ -5,12 +5,13 @@
 // See README "Browser smoke test" for how to run it; it leaves its user and uploads behind.
 import { readFileSync } from "node:fs";
 
-import { type APIResponse, type Page, expect, test } from "@playwright/test";
+import { type APIRequestContext, type APIResponse, type Page, expect, test } from "@playwright/test";
 
 const CSV = process.env.E2E_FLOWS_CSV ?? "e2e/data/flows.csv";
 const CAPTURE = process.env.E2E_CAPTURE ?? "e2e/data/capture.pcap";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "";
+const MAILPIT = process.env.E2E_MAILPIT_URL ?? "http://mailpit:8025";
 const UPLOAD_URL = /\/uploads\/[0-9a-f-]{36}$/;
 const ANALYSIS_MS = 5 * 60_000;
 
@@ -34,6 +35,22 @@ function watch(page: Page, problems: string[]) {
 async function json(response: Pick<APIResponse, "ok" | "url" | "status" | "json">) {
   expect(response.ok(), `${response.url()} answered ${response.status()}`).toBeTruthy();
   return response.json();
+}
+
+/** The text of the newest email to an address, from Mailpit (Compose profile mail). */
+async function mailTo(request: APIRequestContext, address: string): Promise<string> {
+  const search = `${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${address}"`)}`;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      const { messages } = await (await request.get(search)).json();
+      if (messages?.length) return (await (await request.get(`${MAILPIT}/api/v1/message/${messages[0].ID}`)).json()).Text;
+    } catch {
+      // Not up (yet): ask again
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`No email to ${address} at ${MAILPIT}. With IDS_EMAIL_VERIFICATION on, start Mailpit (--profile mail) `
+    + "and set IDS_MAIL_BACKEND=smtp IDS_SMTP_HOST=mailpit IDS_SMTP_PORT=1025 IDS_SMTP_SECURITY=none");
 }
 
 /** On /uploads/new: upload a file (the sample flows by default) and wait for its results; returns the upload id. */
@@ -66,12 +83,24 @@ test("a user's upload, its results and a model switch, end to end", async ({ bro
   });
 
   await test.step("signing up lands where the user was going", async () => {
-    await user.getByLabel("Email").fill(`${username}@example.test`);
+    const email = `${username}@example.test`;
+    await user.getByLabel("Email").fill(email);
     await user.getByLabel("Username").fill(username);
     await user.getByLabel("Password", { exact: true }).fill(password);
     await user.getByLabel("Repeat the password").fill(password);
     await user.getByRole("button", { name: "Create account" }).click();
     await user.waitForURL("**/uploads");
+    const confirm = user.getByRole("heading", { name: "Confirm your email address" });
+    await expect(confirm.or(user.getByRole("link", { name: username }))).toBeVisible();
+    if (await confirm.isVisible()) {
+      // IDS_EMAIL_VERIFICATION is on: open the emailed link, then the app is there
+      const link = new URL((await mailTo(user.request, email)).match(/https?:\/\/\S+\/verify-email\?token=\S+/)![0]);
+      await user.goto(link.pathname + link.search);
+      await expect(user.getByRole("heading", { name: "Email address confirmed" })).toBeVisible();
+      await user.getByRole("link", { name: "Continue to the dashboard" }).click();
+      await user.waitForURL("**/dashboard");
+      await user.goto("/uploads");
+    }
     await expect(user.getByRole("link", { name: username })).toBeVisible();
     await expect(user.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
   });
