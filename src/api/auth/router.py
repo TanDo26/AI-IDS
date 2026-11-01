@@ -13,8 +13,7 @@ from src.api.auth.schemas import (LoginRequest, PasswordChangeRequest, SignupReq
                                   VerificationSent, VerifyEmailRequest, VerifyEmailResponse)
 from src.api.db.models import User
 from src.api.db.session import get_db
-from src.api.ratelimit import (LOGIN_PER_ACCOUNT, LOGIN_PER_IP, SIGNUP_PER_IP, VERIFY_EMAILS_PER_USER, VERIFY_PER_IP,
-                               rate_limit)
+from src.api.ratelimit import LOGIN_PER_ACCOUNT, LOGIN_PER_IP, VERIFY_EMAILS_PER_USER, VERIFY_PER_IP, rate_limit
 from src.api.settings import get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -61,8 +60,9 @@ def signup(body: SignupRequest, request: Request, response: Response, background
     """Creates the account and signs it in. With email verification on, a link goes to the address and
     the app stays closed (403) until it is opened."""
     ua, ip = _client(request)
-    rate_limit(SIGNUP_PER_IP, "signup", ip)
-    verifying = get_settings().email_verification
+    settings = get_settings()
+    rate_limit(settings.signup_rate_limit, "signup", ip)
+    verifying = settings.email_verification
     try:
         if verifying:
             verification.release_stale(db, body.email, body.username)

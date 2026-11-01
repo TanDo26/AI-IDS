@@ -4,12 +4,15 @@ Web application settings, read from environment variables (prefix IDS_) and .env
 configs/config.yaml stays ML-only; everything about the running service lives here.
 """
 
+import re
 import warnings
+from email.utils import parseaddr
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+import limits
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +48,7 @@ class Settings(BaseSettings):
     # Browsers accept Secure cookies on http://localhost; set false only for plain-http access from elsewhere
     cookie_secure: bool = True
     rate_limits_enabled: bool = True
+    signup_rate_limit: str = "3/hour"                # sign-ups per visitor address: "<n>/<minute|hour|day>"
 
     # New accounts confirm their email address (a link sent by email) before they can use the app
     email_verification: bool = False
@@ -57,6 +61,26 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: SecretStr = SecretStr("")
     smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
+
+    @field_validator("signup_rate_limit")
+    @classmethod
+    def _rate_limit(cls, value: str) -> str:
+        try:
+            limits.parse(value)
+        except ValueError:
+            raise ValueError(f"not a rate limit: {value!r}; write it as <n>/<second|minute|hour|day>, e.g. 10/hour")
+        return value
+
+    @field_validator("mail_from")
+    @classmethod
+    def _mail_from(cls, value: str) -> str:
+        # "AI-IDS you@gmail.com" (no angle brackets) is one address with a space in it, not a name and an
+        # address: mail goes out from a mailbox that doesn't exist, and Gmail rejects it (DKIM not passed)
+        _, address = parseaddr(value)
+        if not re.fullmatch(r"[^@\s\"<>]+@[^@\s\"<>]+", address) or (" " in value.strip() and "<" not in value):
+            raise ValueError("IDS_MAIL_FROM must be an address, or a name and the address in angle brackets: "
+                             "AI-IDS <you@gmail.com>")
+        return value
 
     @property
     def uploads_dir(self) -> Path:

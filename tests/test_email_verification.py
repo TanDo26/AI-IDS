@@ -9,12 +9,13 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select, update
 
 from src.api import mail, ratelimit
 from src.api.db.models import AuditLog, EmailToken, Upload, User
 from src.api.ratelimit import VERIFY_EMAILS_PER_USER, RateLimiter
-from src.api.settings import get_settings
+from src.api.settings import Settings, get_settings
 from tests.helpers import API, PASSWORD, csrf, login
 
 CLOSED = "Confirm your email address first"
@@ -200,6 +201,23 @@ def test_production_refuses_verification_without_smtp(override_settings):
     override_settings(env="development")
     with pytest.warns(UserWarning, match="IDS_EMAIL_VERIFICATION"):
         get_settings()
+
+
+@pytest.mark.parametrize("value, ok", [
+    ("AI-IDS <you@gmail.com>", True),
+    ('"AI IDS" <you@gmail.com>', True),
+    ("you@gmail.com", True),
+    ("AI-IDS <no-reply@localhost>", True),          # the default
+    ("AI-IDS you@gmail.com", False),                # sent from the mailbox "AI-IDS you"@gmail.com
+    ("AI-IDS", False),
+    ("AI-IDS <>", False),
+])
+def test_the_sender_must_be_an_address(value, ok):
+    if ok:
+        assert Settings(mail_from=value).mail_from == value
+    else:
+        with pytest.raises(ValidationError, match="angle brackets"):
+            Settings(mail_from=value)
 
 
 class FakeSMTP:

@@ -61,6 +61,27 @@ def test_login_is_rate_limited_per_ip(client, db, override_settings, monkeypatch
     assert r.status_code == 429 and "Retry-After" in r.headers
 
 
+@pytest.mark.parametrize("limit, allowed", [(None, 3), ("5/hour", 5)])
+def test_signup_limit_per_ip_is_a_setting(client, db, override_settings, monkeypatch, limit, allowed):
+    override_settings(rate_limits_enabled=True, **({"signup_rate_limit": limit} if limit else {}))
+    limiter = RateLimiter(None)
+    monkeypatch.setattr(ratelimit, "get_rate_limiter", lambda: limiter)
+
+    def signup(n):
+        return client.post(f"{API}/auth/signup", json={"email": f"u{n}@example.com", "username": f"user{n}",
+                                                       "password": PASSWORD}).status_code
+    # Every attempt counts, a refused one too (here: the same email again)
+    assert [signup(0)] + [signup(0) for _ in range(allowed - 1)] == [201] + [409] * (allowed - 1)
+    assert signup(99) == 429
+
+
+@pytest.mark.parametrize("limit", ["3/fortnight", "lots", ""])
+def test_a_malformed_signup_limit_is_refused(override_settings, limit):
+    override_settings(signup_rate_limit=limit)
+    with pytest.raises(ValueError, match="not a rate limit"):
+        get_settings()
+
+
 # ── settings ────────────────────────────────────────────────
 
 @pytest.mark.parametrize("secret", [DEV_SECRET_KEY, "too-short"])

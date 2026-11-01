@@ -19,9 +19,9 @@ from src.api.settings import get_settings
 
 log = logging.getLogger(__name__)
 
+# Sign-ups per IP come from the settings (IDS_SIGNUP_RATE_LIMIT, default 3/hour)
 LOGIN_PER_IP = "5/minute"
 LOGIN_PER_ACCOUNT = "20/hour"
-SIGNUP_PER_IP = "3/hour"
 UPLOADS_PER_USER = "10/minute"
 VERIFY_PER_IP = "20/minute"
 VERIFY_EMAILS_PER_USER = "3/hour"
