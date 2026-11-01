@@ -772,7 +772,7 @@ docker compose --profile app --profile quick-tunnel logs quick-tunnel | grep try
 Commands that name `cloudflared` or `quick-tunnel` need both profiles, as above. Their service depends on `proxy`, which is in `app`, and without `--profile app` Compose answers `no such service: proxy`.
 
 **What the proxy does for the tunnel** (`docker/Caddyfile`):
-- **Visitor addresses:** Caddy takes the visitor's address from Cloudflare's `Cf-Connecting-Ip`, which a browser can't fake, and hands only that address to the API. Without this, every visitor would share cloudflared's address, and so would the sign-in (5 a minute) and sign-up (3 an hour) limits. Access logs and sessions record the real address.
+- **Visitor addresses:** Caddy takes the visitor's address from Cloudflare's `Cf-Connecting-Ip`, which a browser can't fake, and hands only that address to the API. Without this, every visitor would share cloudflared's address, and so would the sign-in (5 a minute) and sign-up limits. Sign-ups are limited to 3 an hour per address by default; `IDS_SIGNUP_RATE_LIMIT` changes that (e.g. `20/hour` while testing), and every attempt counts, failed ones too. Access logs and sessions record the real address.
 - **Security headers:** `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` and `Content-Security-Policy: frame-ancestors 'none'` (no framing). The `Server` header is removed.
 - **Caching:**
   - The API answers with `Cache-Control: no-store`. Cloudflare caches `.csv` files by default, so without that header a results export could be kept at the edge.
@@ -818,6 +818,10 @@ With `IDS_EMAIL_VERIFICATION=true`, a new account gets an email with a link, and
 - **Gmail:**
   - Turn on 2-Step Verification for the account.
   - Create an app password at https://myaccount.google.com/apppasswords and use its 16 letters, without the spaces, as `IDS_SMTP_PASSWORD`. The account's normal password doesn't work.
+  - Write the sender with the angle brackets: `IDS_MAIL_FROM=AI-IDS <you@gmail.com>`.
+    - Without them, `AI-IDS you@gmail.com` reads as one address, with a space in it, that isn't your account.
+    - Gmail then rejects the mail (`550 5.7.30 … DKIM authentication didn't pass`).
+    - The API refuses to start with such a value.
   - Gmail sends about 500 emails a day.
 - **Resend:** the free plan sends 100 emails a day, but only from a domain you have verified there with DNS records, such as the named tunnel's domain.
 - **Mailpit:** it keeps every email on this machine and shows them at http://127.0.0.1:8025; nothing is delivered. Start it with the stack:
