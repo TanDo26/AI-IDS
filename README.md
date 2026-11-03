@@ -167,6 +167,17 @@ Profiles are defined under `preprocessing.feature_selection_profiles`. Everythin
 | `pr_auc` | Area under Precision-Recall curve |
 | `accuracy` | Overall accuracy |
 
+These are at the model's own threshold (attack when P(attack) > 0.5). PR-AUC scores the ranking over every threshold, so a model can rank attacks above Benign almost perfectly and still flag few of them at 0.5, e.g. when resampling or class weights move its probabilities. `evaluate_all.py` therefore also writes `results/metrics/thresholds.csv`: for each binary experiment, the test results at 0.5 and at one threshold per target FPR (`evaluation.threshold_fprs` in `config.yaml`, default 0.1% and 1%). Each threshold is the lowest that keeps at most that share of the **validation** split's Benign flows above it, so picking it needs no attack labels, only Benign traffic.
+
+| Column | Meaning |
+|--------|---------|
+| `rule` | `0.5`, or `val FPR 0.1%` / `val FPR 1%` |
+| `threshold` | P(attack) above which a flow counts as an attack |
+| `val_benign`, `val_fpr` | Benign validation flows the threshold was picked on, and the share above it (≤ the target) |
+| `recall_attack`, `precision_attack`, `f1_attack`, `fpr`, `tp`/`fp`/`tn`/`fn` | Test results at that threshold |
+
+On the temporal split the test `fpr` can exceed the target: the threshold comes from Monday–Wednesday Benign traffic, the test from Thursday–Friday.
+
 ### Multiclass Classification
 
 | Metric | Description |
@@ -349,13 +360,14 @@ python scripts/train_all.py -e 15 --force        # retrain one experiment
 |:---:|--------|--------------|
 | 1 | `prepare_data.py` | Loads 5 parquet files, cleans data (drop NaN/Inf, duplicate and conflicting feature vectors; binary + multiclass labelling), performs random + temporal splits, saves to `dataset/CIC-IDS2017/splits/` |
 | 2 | `train_all.py` | For each experiment: feature selection → preprocessing → imbalance handling → model training → save model |
-| 3 | `evaluate_all.py` | Loads trained models, evaluates on test sets, generates confusion matrices, PR curves, and a summary CSV |
+| 3 | `evaluate_all.py` | Loads trained models, evaluates on test sets, generates confusion matrices, PR curves, and a summary CSV; binary experiments also at FPR-picked thresholds |
 
 ### Output
 
 After running the pipeline, results are saved to:
 
 - `results/metrics/summary.csv` — comparison table of all experiments
+- `results/metrics/thresholds.csv` — binary experiments at 0.5 and at thresholds picked for 0.1% / 1% validation FPR
 - `results/confusion_matrices/` — confusion matrix heatmaps (PNG)
 - `results/pr_curves/` — precision-recall curves (PNG)
 - `models/` — saved model files (`.pkl` for Sklearn, `.pt` for PyTorch)
