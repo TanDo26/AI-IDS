@@ -3,6 +3,7 @@ Classification metrics for the GeNIS IDS pipeline.
 Supports both binary and multiclass evaluation.
 """
 
+import numpy as np
 from sklearn.metrics import (
     accuracy_score, f1_score, recall_score, precision_score,
     confusion_matrix, precision_recall_curve, auc
@@ -73,3 +74,15 @@ def _multiclass_metrics(y_true, y_pred, y_prob=None):
         metrics["macro_pr_auc"] = None
 
     return metrics
+
+
+def fpr_threshold(benign_scores, target_fpr):
+    """
+    The lowest threshold that puts at most target_fpr of these Benign scores above it (a flow is an
+    attack when its score is > the threshold). Picked from Benign rows only: no attack labels needed.
+    """
+    scores = np.sort(np.asarray(benign_scores, dtype=float))[::-1]
+    if len(scores) == 0:
+        raise ValueError("No Benign scores to pick a threshold from")
+    allowed = int(np.floor(target_fpr * len(scores) + 1e-9))      # Benign rows allowed above it
+    return float(scores[min(allowed, len(scores) - 1)])

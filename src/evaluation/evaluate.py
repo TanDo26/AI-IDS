@@ -2,13 +2,17 @@
 Model evaluation utilities for the GeNIS IDS pipeline.
 """
 
-from .metrics import calculate_metrics
+import numpy as np
+
+from .metrics import calculate_metrics, fpr_threshold
 from src.preprocessing.artifacts import get_fs_profile
+
+THRESHOLD_COLUMNS = ["recall_attack", "precision_attack", "f1_attack", "fpr", "tp", "fp", "tn", "fn"]
 
 
 def evaluate_experiment(model, X_test, y_test, experiment: dict,
                         split_name: str):
-    
+
     exp_name = experiment["name"]
     model_name = experiment["model"]
     strategy = experiment["strategy"]
@@ -37,3 +41,35 @@ def evaluate_experiment(model, X_test, y_test, experiment: dict,
     })
 
     return metrics, y_pred, y_prob
+
+
+def evaluate_thresholds(model, X_val, y_val, y_test, y_prob, experiment: dict,
+                        split_name: str, target_fprs):
+    """
+    A binary experiment's test results at the 0.5 threshold and at one threshold per target FPR,
+    each picked on the validation split's Benign rows alone (no attack labels). A flow is an attack
+    when P(attack) > the threshold. Returns one row per threshold.
+    """
+    val_benign = model.predict_proba(X_val)[:, 1][np.asarray(y_val) == 0]
+    thresholds = [("0.5", None, 0.5)] + [
+        (f"val FPR {target:.1%}".replace(".0%", "%"), target, fpr_threshold(val_benign, target))
+        for target in target_fprs
+    ]
+
+    rows = []
+    for rule, target, threshold in thresholds:
+        test = calculate_metrics(y_test, (y_prob > threshold).astype(int), label_type="binary")
+        rows.append({
+            "experiment": experiment["name"],
+            "model": experiment["model"],
+            "strategy": experiment["strategy"],
+            "split": split_name,
+            "feature_selection": get_fs_profile(experiment),
+            "rule": rule,
+            "target_fpr": target,
+            "threshold": threshold,
+            "val_benign": len(val_benign),
+            "val_fpr": round(float((val_benign > threshold).mean()), 6),
+            **{c: test[c] for c in THRESHOLD_COLUMNS},
+        })
+    return rows

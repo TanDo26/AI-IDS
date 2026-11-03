@@ -17,9 +17,20 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.pipeline_config import config_path
 from src.training.train import load_split
 from src.preprocessing.artifacts import get_fs_profile, preprocessing_artifact_paths
-from src.evaluation.evaluate import evaluate_experiment
+from src.evaluation.evaluate import THRESHOLD_COLUMNS, evaluate_experiment, evaluate_thresholds
 from src.evaluation.plots import plot_confusion_matrix, plot_pr_curve
 from scripts.train_all import parse_exp_filter, filter_experiments
+
+DEFAULT_THRESHOLD_FPRS = [0.001, 0.01]
+
+
+def merge_existing(path: Path, df_new: pd.DataFrame, experiments, exp_filter) -> pd.DataFrame:
+    """With a filter, keep the other experiments' rows of an existing file instead of overwriting it."""
+    if exp_filter is None or not path.exists():
+        return df_new
+    df_existing = pd.read_csv(path)
+    df_existing = df_existing[~df_existing["experiment"].isin({e["name"] for e in experiments})]
+    return pd.concat([df_existing, df_new], ignore_index=True)
 
 
 def main(exp_filter=None):
@@ -46,7 +57,10 @@ def main(exp_filter=None):
             mapping_data = json.load(f)
             class_names = mapping_data.get("int_to_label")
 
+    target_fprs = config.get("evaluation", {}).get("threshold_fprs", DEFAULT_THRESHOLD_FPRS)
+
     all_metrics = []
+    threshold_rows = []
     start = time.perf_counter()
 
     for experiment in experiments:
@@ -66,8 +80,8 @@ def main(exp_filter=None):
         selector = joblib.load(selector_path)
         preprocessor = joblib.load(preprocessor_path)
 
-        _, _, X_test, _, _, y_test = load_split(split_name, label_type, config)
-        
+        _, X_val, X_test, _, y_val, y_test = load_split(split_name, label_type, config)
+
         X_test = selector.transform(X_test)
         X_test_t = preprocessor.transform(X_test)
 
@@ -104,6 +118,15 @@ def main(exp_filter=None):
                   f"FPR={metrics['fpr']:.4f} | "
                   f"Macro-F1={metrics['macro_f1']:.4f} | "
                   f"PR-AUC={metrics.get('pr_auc', 'N/A')}")
+
+            X_val_t = preprocessor.transform(selector.transform(X_val))
+            rows = evaluate_thresholds(model, X_val_t, y_val, y_test, y_prob, experiment,
+                                       split_name, target_fprs)
+            threshold_rows.extend(rows)
+            for row in rows[1:]:
+                print(f"    {row['rule']:>12}: threshold={row['threshold']:.6g} | "
+                      f"Recall={row['recall_attack']:.4f} | FPR={row['fpr']:.4f} | "
+                      f"F1={row['f1_attack']:.4f}")
         else:
             print(f"  {exp_name} ({split_name}|{label_type}) | "
                   f"Accuracy={metrics['accuracy']:.4f} | "
@@ -114,17 +137,8 @@ def main(exp_filter=None):
     metrics_dir = Path(config["output"]["metrics_dir"])
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
-    # When filtering, merge with existing summary.csv instead of overwriting
     summary_path = metrics_dir / "summary.csv"
-    df_new = pd.DataFrame(all_metrics)
-
-    if exp_filter is not None and summary_path.exists():
-        df_existing = pd.read_csv(summary_path)
-        evaluated_names = {e["name"] for e in experiments}
-        df_existing = df_existing[~df_existing["experiment"].isin(evaluated_names)]
-        df_metrics = pd.concat([df_existing, df_new], ignore_index=True)
-    else:
-        df_metrics = df_new
+    df_metrics = merge_existing(summary_path, pd.DataFrame(all_metrics), experiments, exp_filter)
 
     # Rows written before feature-selection profiles existed used the base filters only
     df_metrics["feature_selection"] = df_metrics["feature_selection"].fillna("none")
@@ -140,10 +154,21 @@ def main(exp_filter=None):
     df_metrics = df_metrics[col_order]
     df_metrics.to_csv(summary_path, index=False)
 
+    # Binary experiments only: test results at 0.5 and at thresholds picked on validation Benign rows
+    thresholds_path = metrics_dir / "thresholds.csv"
+    df_thresholds = merge_existing(thresholds_path, pd.DataFrame(threshold_rows), experiments, exp_filter)
+    if not df_thresholds.empty:
+        df_thresholds = df_thresholds[
+            ["experiment", "model", "strategy", "split", "feature_selection", "rule", "target_fpr",
+             "threshold", "val_benign", "val_fpr", *THRESHOLD_COLUMNS]]
+        df_thresholds.to_csv(thresholds_path, index=False)
+
     elapsed = time.perf_counter() - start
     print(f"\n{'='*70}")
     print(f"  Evaluation complete in {elapsed:.1f}s")
     print(f"  Results saved to {summary_path}")
+    if not df_thresholds.empty:
+        print(f"  Thresholds saved to {thresholds_path}")
     print(f"{'='*70}")
 
 

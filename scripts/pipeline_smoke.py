@@ -5,10 +5,12 @@ Pipeline smoke test (CI): the whole training path on a tiny synthetic dataset, o
     python scripts/pipeline_smoke.py --keep DIR       # in DIR, kept for a look
 
 Writes five day files shaped like CIC-IDS2017 (the 82 features + Label, with an "Attempted" row,
-flows repeated on another day and flows under two labels, all of which cleaning drops) and a config derived from configs/config.yaml with two small experiments
-(RandomForest on the random split, XGBoost with Pearson selection on the temporal split). Then runs
-prepare -> train -> evaluate, builds a bundle from the first experiment and loads it the way the
-server does (hash and version checks, self-test), and predicts a few flows. Every path in the
+flows repeated on another day and flows under two labels, all of which cleaning drops) and a config
+derived from configs/config.yaml with three small experiments (multiclass RandomForest on the random
+split; multiclass XGBoost with Pearson selection and binary RandomForest on the temporal split).
+Then runs prepare -> train -> evaluate (the binary one also at FPR-picked thresholds), builds a
+bundle from the first experiment and loads it the way the server does (hash and version checks,
+self-test), and predicts a few flows. Every path in the
 config is relative, so all output stays in that directory; the project's data is never touched.
 """
 
@@ -45,6 +47,8 @@ EXPERIMENTS = [
     {"name": "EXP-02", "model": "xgboost", "strategy": "undersampling", "split": "temporal",
      "label": "multiclass", "feature_selection": "pearson",
      "params": {"n_estimators": 30, "max_depth": 4, "n_jobs": 2, "device": "cpu"}},
+    {"name": "EXP-03", "model": "random_forest", "strategy": "class_weight", "split": "temporal",
+     "label": "binary", "params": {"n_estimators": 30, "n_jobs": 2}},
 ]
 
 
@@ -110,6 +114,15 @@ def smoke_config(work: Path) -> Path:
     return path
 
 
+def check_thresholds(thresholds: pd.DataFrame) -> None:
+    """Binary experiments have a row at 0.5 and one per target FPR, which validation stays within."""
+    binary = sorted(e["name"] for e in EXPERIMENTS if e["label"] == "binary")
+    picked = thresholds[thresholds["target_fpr"].notna()]
+    if (sorted(thresholds["experiment"].unique()) != binary or len(thresholds) != 3 * len(binary)
+            or (picked["val_fpr"] > picked["target_fpr"]).any()):
+        raise SystemExit(f"Unexpected results/metrics/thresholds.csv:\n{thresholds.to_string()}")
+
+
 def run(work: Path) -> None:
     from scripts import build_bundle, evaluate_all, prepare_data, train_all
     from src.inference.bundle import load_bundle
@@ -129,6 +142,7 @@ def run(work: Path) -> None:
     missing = {e["name"] for e in EXPERIMENTS} - evaluated
     if missing:
         raise SystemExit(f"Not in results/metrics/summary.csv: {sorted(missing)}")
+    check_thresholds(pd.read_csv(work / "results" / "metrics" / "thresholds.csv"))
 
     built = build_bundle.main("EXP-01", str(work / "model_store"), 2)
     bundle = load_bundle(built.path)                  # as the server loads it: hashes, versions, self-test

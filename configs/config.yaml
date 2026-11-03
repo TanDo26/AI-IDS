@@ -686,6 +686,9 @@ evaluation:
   confusion_matrix: true
   pr_curve: true
   classification_report: true
+  # Binary experiments: besides 0.5, one threshold per target FPR, picked on the validation split's
+  # Benign rows only -> results/metrics/thresholds.csv
+  threshold_fprs: [0.001, 0.01]
 
 # --- Output ---
 output:
