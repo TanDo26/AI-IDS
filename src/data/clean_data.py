@@ -3,6 +3,47 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+CONFLICTING_LABELS = ("drop", "first")
+
+
+def _drop_duplicates(df: pd.DataFrame, feature_columns: list, target_column: str,
+                     conflicting_labels: str) -> pd.DataFrame:
+    """
+    A row is a duplicate when its features repeat an earlier row's, whatever day (file) either came
+    from: rows are compared on the features alone, as the models see them. The first copy is kept,
+    i.e. the one from the earliest file. A feature vector recorded under more than one label is
+    dropped entirely ("drop"; one input can't be taught two answers) or kept with its first label ("first").
+    """
+    if conflicting_labels not in CONFLICTING_LABELS:
+        raise ValueError(f"conflicting_labels must be one of {CONFLICTING_LABELS}, not {conflicting_labels!r}")
+
+    copies = df.loc[df.duplicated(subset=feature_columns, keep=False)]
+    conflicting = copies.groupby(feature_columns, sort=False)[target_column].transform("nunique") > 1
+
+    if conflicting.any():
+        label_sets = (copies.loc[conflicting]
+                      .groupby(feature_columns, sort=False)[target_column]
+                      .agg(lambda labels: " / ".join(sorted(set(labels)))))
+        verb = "Dropped" if conflicting_labels == "drop" else "Kept the first label of"
+        print(f"  {verb} {int(conflicting.sum()):,} rows of {len(label_sets):,} feature vectors "
+              f"recorded under more than one label:")
+        for labels, n in label_sets.value_counts().items():
+            print(f"    {labels}: {n:,}")
+        if conflicting_labels == "drop":
+            df = df.drop(index=copies.index[conflicting])
+            copies = copies.loc[~conflicting]
+
+    duplicate = copies.duplicated(subset=feature_columns)
+    other_day = ""
+    if "_source_file" in copies.columns:
+        first_file = copies.groupby(feature_columns, sort=False)["_source_file"].transform("first")
+        n = int((first_file[duplicate] != copies.loc[duplicate, "_source_file"]).sum())
+        other_day = f"; {n:,} repeat a row from another file"
+    df = df.drop(index=copies.index[duplicate])
+    print(f"  Dropped {int(duplicate.sum()):,} duplicate rows (same features as an earlier row{other_day})")
+
+    return df.copy()
+
 
 def clean_dataset(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
@@ -54,11 +95,10 @@ def clean_dataset(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
     print(f"  Dropped {nan_rows:,} rows containing NaN")
 
-    duplicate_rows = int(df.duplicated().sum())
+    features = dataset_config["features"]
+    feature_columns = features.get("numeric", []) + features.get("categorical", [])
 
-    df = df.drop_duplicates().copy()
-
-    print(f"  Dropped {duplicate_rows:,} duplicate rows")
+    df = _drop_duplicates(df, feature_columns, target_column, dataset_config.get("conflicting_labels", "drop"))
 
 
     df["OriginalLabel"] = df[target_column].copy()

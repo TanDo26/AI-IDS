@@ -36,13 +36,25 @@ This project builds a complete ML pipeline — from raw data to evaluation repor
 | `DoS-Wednesday.parquet` | 477,871 | DoS Hulk, GoldenEye, Slowloris, Slowhttptest, Heartbleed |
 | `Infiltration-Webattacks-Thursday.parquet` | 281,439 | Infiltration, Portscan, Web Attack (BF/XSS/SQLi) |
 | `Portscan-DDos-Botnet-Friday.parquet` | 370,259 | DDoS, Portscan, Botnet |
-| **Total** | **~1,787,358** | **15 attack types** |
+| **Total** | **1,787,358** | **15 attack types** |
 
 **Label mappings:**
 - **Binary:** `Benign` → 0, everything else → 1, `Attempted-*` rows dropped
 - **Multiclass:** Each attack type encoded as a unique integer label
 
-After cleaning: **~1,778,392 flows** with **82 numeric features**.
+**Cleaning** (`src/data/clean_data.py`; `python scripts/prepare_data.py` prints each count):
+
+| Step | Rows removed | Rows left |
+|---|---:|---:|
+| Raw (5 files) | | 1,787,358 |
+| `Attempted-*` labels | 8,966 | 1,778,392 |
+| NaN / Inf values | 0 | 1,778,392 |
+| Feature vectors under more than one label (757 vectors, every copy) | 1,516 | 1,776,876 |
+| Duplicates: same 82 features as an earlier row, any day | 39,344 | **1,737,532** |
+
+Duplicates are compared on the features alone, not on the source file, and the copy from the earliest day is kept. All 39,344 repeat a flow from another day, and all are Benign. The conflicting vectors are 744 Benign / Infiltration - Portscan, 11 Infiltration - Portscan / Portscan and 2 with all three labels; `conflicting_labels: first` in `config.yaml` keeps their first label instead. Before this, cleaning compared whole rows including the file name and dropped nothing, so 8,438 random-split test rows and 22,822 temporal test rows repeated a train row; `prepare_data.py` now prints that count for each split (0).
+
+After cleaning: **1,737,532 flows** (1,456,415 Benign, 281,117 attacks) with **82 numeric features**.
 
 ## Experiment Matrix
 
@@ -184,7 +196,7 @@ AI-IDS/
 ├── src/
 │   ├── data/
 │   │   ├── load_data.py             # Load + concat parquet files
-│   │   ├── clean_data.py            # NaN/Inf, dedup, binary + multiclass labels
+│   │   ├── clean_data.py            # NaN/Inf, dedup on features, binary + multiclass labels
 │   │   └── split_data.py            # Random stratified + temporal split
 │   ├── preprocessing/
 │   │   ├── feature_selection.py     # Zero-variance + high-correlation removal, Pearson / MI ranking
@@ -335,7 +347,7 @@ python scripts/train_all.py -e 15 --force        # retrain one experiment
 
 | Step | Script | What It Does |
 |:---:|--------|--------------|
-| 1 | `prepare_data.py` | Loads 5 parquet files, cleans data (drop NaN/Inf/duplicates, binary + multiclass labelling), performs random + temporal splits, saves to `dataset/CIC-IDS2017/splits/` |
+| 1 | `prepare_data.py` | Loads 5 parquet files, cleans data (drop NaN/Inf, duplicate and conflicting feature vectors; binary + multiclass labelling), performs random + temporal splits, saves to `dataset/CIC-IDS2017/splits/` |
 | 2 | `train_all.py` | For each experiment: feature selection → preprocessing → imbalance handling → model training → save model |
 | 3 | `evaluate_all.py` | Loads trained models, evaluates on test sets, generates confusion matrices, PR curves, and a summary CSV |
 

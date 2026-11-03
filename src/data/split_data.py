@@ -20,6 +20,15 @@ def _get_meta_columns(config):
 LABEL_COLUMNS = ["BinaryLabel", "MulticlassLabel"]
 
 
+def rows_also_in(X: pd.DataFrame, X_train: pd.DataFrame) -> int:
+    """
+    How many rows of X repeat a row of X_train (every feature equal): rows a model could have seen in
+    training. Rows are compared by a 64-bit hash, so 0 is exact; a collision could only add a match.
+    """
+    train = pd.util.hash_pandas_object(X_train, index=False)
+    return int(pd.util.hash_pandas_object(X[X_train.columns], index=False).isin(train).sum())
+
+
 def random_split(df, config):
     split_cfg = config["splitting"]["random"]
     seed = config["splitting"]["random_state"]

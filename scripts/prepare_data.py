@@ -13,7 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.pipeline_config import config_path
 from src.data.load_data import load_dataset
 from src.data.clean_data import clean_dataset
-from src.data.split_data import random_split, temporal_split, save_split
+from src.data.split_data import random_split, rows_also_in, temporal_split, save_split
 
 
 def main():
@@ -36,11 +36,13 @@ def main():
     X_tr, X_v, X_te, y_tr, y_v, y_te = random_split(df, config)
     save_split(X_tr, X_v, X_te, y_tr, y_v, y_te, "random", config)
     print(f"  Train: {len(X_tr):,} | Val: {len(X_v):,} | Test: {len(X_te):,}")
+    print(f"  Rows repeating a train row: val {rows_also_in(X_v, X_tr):,} | test {rows_also_in(X_te, X_tr):,}")
 
     print("\n[Step 4/4] Temporal split (Mon-Wed / Thu-Fri)...")
     X_tr, X_v, X_te, y_tr, y_v, y_te = temporal_split(df, config)
     save_split(X_tr, X_v, X_te, y_tr, y_v, y_te, "temporal", config)
     print(f"  Train: {len(X_tr):,} | Val: {len(X_v):,} | Test: {len(X_te):,}")
+    print(f"  Rows repeating a train row: val {rows_also_in(X_v, X_tr):,} | test {rows_also_in(X_te, X_tr):,}")
 
     elapsed = time.perf_counter() - start
     print(f"\n{'='*70}")
