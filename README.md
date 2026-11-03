@@ -178,6 +178,21 @@ These are at the model's own threshold (attack when P(attack) > 0.5). PR-AUC sco
 
 On the temporal split the test `fpr` can exceed the target: the threshold comes from Monday–Wednesday Benign traffic, the test from Thursday–Friday.
 
+### Per class
+
+An overall recall can hide which attacks are caught: on the temporal split DDoS is most of the Thursday–Friday attacks, so a model that only catches DDoS still scores well. `results/metrics/per_class.csv` therefore gives every experiment's test results per original class (`MulticlassLabel`), binary experiments included: one block per threshold rule of `thresholds.csv`, multiclass ones at `argmax`. It keeps the counts, so a class with two test rows reads as 1/2 rather than 50%.
+
+| Column | Meaning |
+|--------|---------|
+| `rule` | `0.5`, `val FPR 0.1%`, `val FPR 1%` (binary) or `argmax` (multiclass) |
+| `class_id`, `class` | The original class of the test rows |
+| `total` | Test rows of that class |
+| `detected` | Predicted as an attack (any attack class); for Benign, the false alarms |
+| `correct` | Binary: on the right side (an attack flagged, a Benign row not flagged). Multiclass: predicted as exactly this class |
+| `recall` | `correct / total` |
+
+For a multiclass model, `detected` minus `correct` is the attacks caught under another attack's name.
+
 ### Multiclass Classification
 
 | Metric | Description |
@@ -360,7 +375,7 @@ python scripts/train_all.py -e 15 --force        # retrain one experiment
 |:---:|--------|--------------|
 | 1 | `prepare_data.py` | Loads 5 parquet files, cleans data (drop NaN/Inf, duplicate and conflicting feature vectors; binary + multiclass labelling), performs random + temporal splits, saves to `dataset/CIC-IDS2017/splits/` |
 | 2 | `train_all.py` | For each experiment: feature selection → preprocessing → imbalance handling → model training → save model |
-| 3 | `evaluate_all.py` | Loads trained models, evaluates on test sets, generates confusion matrices, PR curves, and a summary CSV; binary experiments also at FPR-picked thresholds |
+| 3 | `evaluate_all.py` | Loads trained models, evaluates on test sets, generates confusion matrices, PR curves, and a summary CSV; binary experiments also at FPR-picked thresholds; counts per class for every experiment |
 
 ### Output
 
@@ -368,6 +383,7 @@ After running the pipeline, results are saved to:
 
 - `results/metrics/summary.csv` — comparison table of all experiments
 - `results/metrics/thresholds.csv` — binary experiments at 0.5 and at thresholds picked for 0.1% / 1% validation FPR
+- `results/metrics/per_class.csv` — every experiment's test rows per original class: total, detected, correct, recall
 - `results/confusion_matrices/` — confusion matrix heatmaps (PNG)
 - `results/pr_curves/` — precision-recall curves (PNG)
 - `models/` — saved model files (`.pkl` for Sklearn, `.pt` for PyTorch)
