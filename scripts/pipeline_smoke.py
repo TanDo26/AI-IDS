@@ -8,7 +8,8 @@ Writes five day files shaped like CIC-IDS2017 (the 82 features + Label, with an 
 flows repeated on another day and flows under two labels, all of which cleaning drops) and a config
 derived from configs/config.yaml with three small experiments (multiclass RandomForest on the random
 split; multiclass XGBoost with Pearson selection and binary RandomForest on the temporal split).
-Then runs prepare -> train -> evaluate (the binary one also at FPR-picked thresholds), builds a
+Then runs prepare -> train -> evaluate (the binary one also at FPR-picked thresholds; per-class
+counts for all), builds a
 bundle from the first experiment and loads it the way the server does (hash and version checks,
 self-test), and predicts a few flows. Every path in the
 config is relative, so all output stays in that directory; the project's data is never touched.
@@ -123,6 +124,22 @@ def check_thresholds(thresholds: pd.DataFrame) -> None:
         raise SystemExit(f"Unexpected results/metrics/thresholds.csv:\n{thresholds.to_string()}")
 
 
+def check_per_class(per_class: pd.DataFrame, thresholds: pd.DataFrame) -> None:
+    """Per rule, each experiment's classes add up to its test split; binary ones agree with thresholds.csv."""
+    test_rows = {split: len(pd.read_parquet(Path("dataset", DATASET, "splits", split, "y_test.parquet")))
+                 for split in ("random", "temporal")}
+    totals = per_class.groupby(["experiment", "split", "rule"])[["total", "correct"]].sum()
+    right = (thresholds["tp"] + thresholds["tn"]).set_axis(
+        pd.MultiIndex.from_frame(thresholds[["experiment", "rule"]]))
+    expected_rules = {e["name"]: set(thresholds.loc[thresholds["experiment"] == e["name"], "rule"]) or {"argmax"}
+                      for e in EXPERIMENTS}
+    rules = {name: set(group.index.get_level_values("rule")) for name, group in totals.groupby(level="experiment")}
+    wrong = [(experiment, rule) for (experiment, split, rule), r in totals.iterrows()
+             if r.total != test_rows[split] or r.correct != right.get((experiment, rule), r.correct)]
+    if wrong or rules != expected_rules:
+        raise SystemExit(f"Unexpected results/metrics/per_class.csv:\n{totals.to_string()}")
+
+
 def run(work: Path) -> None:
     from scripts import build_bundle, evaluate_all, prepare_data, train_all
     from src.inference.bundle import load_bundle
@@ -142,7 +159,9 @@ def run(work: Path) -> None:
     missing = {e["name"] for e in EXPERIMENTS} - evaluated
     if missing:
         raise SystemExit(f"Not in results/metrics/summary.csv: {sorted(missing)}")
-    check_thresholds(pd.read_csv(work / "results" / "metrics" / "thresholds.csv"))
+    thresholds = pd.read_csv(work / "results" / "metrics" / "thresholds.csv")
+    check_thresholds(thresholds)
+    check_per_class(pd.read_csv(work / "results" / "metrics" / "per_class.csv"), thresholds)
 
     built = build_bundle.main("EXP-01", str(work / "model_store"), 2)
     bundle = load_bundle(built.path)                  # as the server loads it: hashes, versions, self-test

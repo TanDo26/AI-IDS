@@ -17,7 +17,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.pipeline_config import config_path
 from src.training.train import load_split
 from src.preprocessing.artifacts import get_fs_profile, preprocessing_artifact_paths
-from src.evaluation.evaluate import THRESHOLD_COLUMNS, evaluate_experiment, evaluate_thresholds
+from src.evaluation.evaluate import (PER_CLASS_COLUMNS, THRESHOLD_COLUMNS, evaluate_experiment,
+                                     evaluate_thresholds, per_class_counts)
 from src.evaluation.plots import plot_confusion_matrix, plot_pr_curve
 from scripts.train_all import parse_exp_filter, filter_experiments
 
@@ -31,6 +32,12 @@ def merge_existing(path: Path, df_new: pd.DataFrame, experiments, exp_filter) ->
     df_existing = pd.read_csv(path)
     df_existing = df_existing[~df_existing["experiment"].isin({e["name"] for e in experiments})]
     return pd.concat([df_existing, df_new], ignore_index=True)
+
+
+def test_classes(config: dict, split_name: str):
+    """The test rows' original classes (MulticlassLabel), whatever label the experiment uses."""
+    split_dir = Path(config["output"]["splits_dir"].format(dataset_name=config["active_dataset"])) / split_name
+    return pd.read_parquet(split_dir / "y_test.parquet", columns=["MulticlassLabel"])["MulticlassLabel"].to_numpy()
 
 
 def main(exp_filter=None):
@@ -51,16 +58,19 @@ def main(exp_filter=None):
 
     ds_name = config["active_dataset"]
     mapping_path = Path(config["datasets"][ds_name]["data_dir"]) / "label_mapping.json"
-    class_names = None
-    if mapping_path.exists():
-        with open(mapping_path, "r", encoding="utf-8") as f:
-            mapping_data = json.load(f)
-            class_names = mapping_data.get("int_to_label")
+    if not mapping_path.exists():
+        raise FileNotFoundError(f"{mapping_path} is missing: run scripts/prepare_data.py first.")
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        mapping_data = json.load(f)
+    class_names = mapping_data["int_to_label"]
+    benign_class = mapping_data["label_to_int"][config["datasets"][ds_name]["label_mapping"]["benign_label"]]
+    classes_by_split = {}
 
     target_fprs = config.get("evaluation", {}).get("threshold_fprs", DEFAULT_THRESHOLD_FPRS)
 
     all_metrics = []
     threshold_rows = []
+    per_class_rows = []
     start = time.perf_counter()
 
     for experiment in experiments:
@@ -99,6 +109,9 @@ def main(exp_filter=None):
             model, X_test_t, y_test, experiment, split_name
         )
         all_metrics.append(metrics)
+        if split_name not in classes_by_split:
+            classes_by_split[split_name] = test_classes(config, split_name)
+        classes = classes_by_split[split_name]
 
         plot_confusion_matrix(
             y_test, y_pred, exp_name, split_name,
@@ -120,9 +133,12 @@ def main(exp_filter=None):
                   f"PR-AUC={metrics.get('pr_auc', 'N/A')}")
 
             X_val_t = preprocessor.transform(selector.transform(X_val))
-            rows = evaluate_thresholds(model, X_val_t, y_val, y_test, y_prob, experiment,
-                                       split_name, target_fprs)
+            rows, predictions = evaluate_thresholds(model, X_val_t, y_val, y_test, y_prob, experiment,
+                                                    split_name, target_fprs)
             threshold_rows.extend(rows)
+            for rule, predicted in predictions.items():
+                per_class_rows.extend(per_class_counts(classes, predicted, experiment, split_name, rule,
+                                                       class_names, benign_class))
             for row in rows[1:]:
                 print(f"    {row['rule']:>12}: threshold={row['threshold']:.6g} | "
                       f"Recall={row['recall_attack']:.4f} | FPR={row['fpr']:.4f} | "
@@ -133,6 +149,8 @@ def main(exp_filter=None):
                   f"Macro-F1={metrics['macro_f1']:.4f} | "
                   f"Weighted-F1={metrics['weighted_f1']:.4f} | "
                   f"Macro-Recall={metrics['macro_recall']:.4f}")
+            per_class_rows.extend(per_class_counts(classes, y_pred, experiment, split_name, "argmax",
+                                                   class_names, benign_class))
 
     metrics_dir = Path(config["output"]["metrics_dir"])
     metrics_dir.mkdir(parents=True, exist_ok=True)
@@ -163,12 +181,18 @@ def main(exp_filter=None):
              "threshold", "val_benign", "val_fpr", *THRESHOLD_COLUMNS]]
         df_thresholds.to_csv(thresholds_path, index=False)
 
+    # Every experiment, per original class: binary at each threshold above, multiclass at argmax
+    per_class_path = metrics_dir / "per_class.csv"
+    df_per_class = merge_existing(per_class_path, pd.DataFrame(per_class_rows), experiments, exp_filter)
+    df_per_class[PER_CLASS_COLUMNS].to_csv(per_class_path, index=False)
+
     elapsed = time.perf_counter() - start
     print(f"\n{'='*70}")
     print(f"  Evaluation complete in {elapsed:.1f}s")
     print(f"  Results saved to {summary_path}")
     if not df_thresholds.empty:
         print(f"  Thresholds saved to {thresholds_path}")
+    print(f"  Per-class counts saved to {per_class_path}")
     print(f"{'='*70}")
 
 
