@@ -4,8 +4,8 @@ Pipeline smoke test (CI): the whole training path on a tiny synthetic dataset, o
     python scripts/pipeline_smoke.py                  # in a temporary directory, deleted afterwards
     python scripts/pipeline_smoke.py --keep DIR       # in DIR, kept for a look
 
-Writes five day files shaped like CIC-IDS2017 (the 82 features + Label, with an "Attempted" row
-that cleaning drops) and a config derived from configs/config.yaml with two small experiments
+Writes five day files shaped like CIC-IDS2017 (the 82 features + Label, with an "Attempted" row,
+flows repeated on another day and flows under two labels, all of which cleaning drops) and a config derived from configs/config.yaml with two small experiments
 (RandomForest on the random split, XGBoost with Pearson selection on the temporal split). Then runs
 prepare -> train -> evaluate, builds a bundle from the first experiment and loads it the way the
 server does (hash and version checks, self-test), and predicts a few flows. Every path in the
@@ -48,12 +48,16 @@ EXPERIMENTS = [
 ]
 
 
-def synthetic_days(out_dir: Path, seed: int = 0) -> None:
-    """Each class is a cloud around its own centre, so the models have something to learn."""
+def synthetic_days(out_dir: Path, seed: int = 0) -> int:
+    """
+    Each class is a cloud around its own centre, so the models have something to learn. Some flows
+    repeat, for cleaning to drop: Monday flows again on Thursday, Friday Benign flows again labelled
+    Portscan (both copies go). Returns how many rows cleaning should keep.
+    """
     rng = np.random.default_rng(seed)
     classes = ["Benign"] + [c for _, attacks in DAYS.values() for c in attacks]
     centres = {c: rng.lognormal(3.0, 1.5, len(FEATURES)) for c in classes}
-    out_dir.mkdir(parents=True, exist_ok=True)
+    days = {}
     for name, (_, attacks) in DAYS.items():
         frames = []
         for cls, n in [("Benign", BENIGN_ROWS)] + [(a, ATTACK_ROWS) for a in attacks]:
@@ -61,9 +65,31 @@ def synthetic_days(out_dir: Path, seed: int = 0) -> None:
             df["Protocol"] = rng.choice([6.0, 17.0], n)
             df["Label"] = cls
             frames.append(df)
-        day = pd.concat(frames, ignore_index=True)
+        days[name] = pd.concat(frames, ignore_index=True)
+    monday, thursday, friday = (list(DAYS)[i] for i in (0, 3, 4))
+    repeated = days[monday].iloc[100:150]
+    conflicting = days[friday].iloc[100:110].assign(Label="Portscan")
+    days[thursday] = pd.concat([days[thursday], repeated], ignore_index=True)
+    days[friday] = pd.concat([days[friday], conflicting], ignore_index=True)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, day in days.items():
         day.loc[0, "Label"] = "Attempted-relabel-as-Benign"      # dropped by drop_labels
         day.to_parquet(out_dir / name, index=False)
+    return sum(map(len, days.values())) - len(days) - len(repeated) - 2 * len(conflicting)
+
+
+def check_splits(kept: int) -> None:
+    """Every split holds the rows cleaning kept, and no validation or test row repeats a train row."""
+    from src.data.split_data import rows_also_in
+
+    for split in ("random", "temporal"):
+        X = {part: pd.read_parquet(Path("dataset", DATASET, "splits", split, f"X_{part}.parquet"))
+             for part in ("train", "val", "test")}
+        rows = sum(map(len, X.values()))
+        shared = rows_also_in(pd.concat([X["val"], X["test"]]), X["train"])
+        if rows != kept or shared:
+            raise SystemExit(f"{split} split: {rows} rows (expected {kept}), {shared} repeating a train row")
 
 
 def smoke_config(work: Path) -> Path:
@@ -89,11 +115,12 @@ def run(work: Path) -> None:
     from src.inference.bundle import load_bundle
     from src.inference.engine import InferenceEngine
 
-    synthetic_days(work / "dataset" / DATASET)
+    kept = synthetic_days(work / "dataset" / DATASET)
     os.environ[CONFIG_ENV] = str(smoke_config(work))
     os.chdir(work)                                    # the config's output paths are relative
 
     prepare_data.main()
+    check_splits(kept)
     train_all.main(exp_filter=None, force=True)
     evaluate_all.main(exp_filter=None)
 

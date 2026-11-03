@@ -23,6 +23,10 @@ datasets:
     drop_labels:
       - Attempted
 
+    # Rows whose features repeat an earlier row's are dropped, whatever their day (file). A feature
+    # vector recorded under more than one label: drop (every copy) | first (keep its first label)
+    conflicting_labels: drop
+
     # Binary label mapping
     label_mapping:
       type: binary
